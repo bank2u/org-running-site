@@ -1,0 +1,496 @@
+<title>บันทึกตรวจก้าว</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one 880px reading column. Verdict first, then every counted point grouped by grade with its evidence;
+   everything else sits in collapsed rows at the bottom. Light theme only, one radius (8px), dividers instead of cards. */
+:root {
+  --bg: #fcfbf8; --panel: #f5f2ea; --tint: #f3f0e8; --ink: #14181f; --muted: #5a6171; --line: #e6e2d8; --gold: #a8844a;
+  --strong: #9f1239; --strong-bg: #f9e1e7; --likely: #c44f00; --likely-bg: #fde9cc; --watch: #5b616c; --watch-bg: #eceae6;
+  --s1: #2f6fb3; --s2: #d0612f; --s3: #2e8a62; --s4: #8a4fb3; --s5: #b3364f; --s6: #6b7a1f;
+  --font: "Anuphan", "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: var(--font);
+  --r: 8px;
+}
+:root { color-scheme: light; }
+::selection { background: #e9dcc0; color: var(--ink); }
+input, textarea { caret-color: var(--gold); }
+html { scrollbar-color: #cfc8b8 var(--bg); }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.75 var(--font); font-variant-numeric: tabular-nums; }
+.wrap { max-width: 880px; margin: 0 auto; padding-block: 36px 96px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3, p, ul { margin: 0; }
+h1 { font: 700 clamp(30px, 6vw, 44px)/1.35 var(--serif); letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font: 600 22px/1.45 var(--serif); }
+.muted { color: var(--muted); }
+.small { font-size: 14px; line-height: 1.65; }
+button { font: inherit; color: inherit; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+
+/* verdict */
+.verdict { display: grid; gap: 24px; }
+.verdict .lead { display: grid; gap: 6px; padding-top: 20px; border-top: 1px solid var(--line); position: relative; }
+.verdict .lead::before { content: ""; position: absolute; top: -1px; left: 0; width: 56px; height: 3px; background: var(--gold); border-radius: 0 0 2px 2px; }
+.tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgba(40,32,16,.04), 0 8px 24px -12px rgba(40,32,16,.12); overflow: hidden; }
+.tier { display: grid; gap: 2px; align-content: start; padding: 20px 22px; text-align: left; background: none; border: 0; cursor: pointer; transition: background-color .2s cubic-bezier(.16,1,.3,1); }
+.tier:hover { background: var(--bg); }
+.tier + .tier { border-left: 1px solid var(--line); }
+.tier .n { font: 700 44px/1.2 var(--serif); }
+.tier .t { font-weight: 600; }
+.tier .d { font-size: 14px; line-height: 1.6; color: var(--muted); }
+.t-strong .n, .t-strong .t { color: var(--strong); }
+.t-likely .n, .t-likely .t { color: var(--likely); }
+.t-watch .n, .t-watch .t { color: var(--watch); }
+.tier .t::before, .group-head h3::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: currentColor; box-sizing: border-box; }
+.t-likely .t::before, .group.t-likely h3::before { border-radius: 50%; }
+.t-watch .t::before, .group.t-watch h3::before { border-radius: 50%; background: none; border: 2px solid currentColor; }
+.teams { display: flex; gap: 8px; flex-wrap: wrap; }
+.teams button { border: 1px solid var(--line); background: var(--bg); border-radius: var(--r); padding: 4px 14px; cursor: pointer; }
+.teams button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* points */
+.sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; margin-bottom: 4px; }
+.filters { display: flex; flex-wrap: wrap; gap: 4px 4px; }
+.filters button { background: none; border: 0; border-radius: var(--r); padding: 6px 12px; min-height: 36px; cursor: pointer; color: var(--muted); }
+.filters button { border-radius: 999px; transition: background-color .2s, color .2s; }
+.filters button:hover { color: var(--ink); }
+.filters button[aria-pressed="true"] { background: var(--ink); color: #fff; font-weight: 500; }
+.group { margin-top: 28px; scroll-margin-top: 16px; }
+.group-head { display: flex; align-items: baseline; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid currentColor; }
+.group-head h3 { font: 600 18px/1.5 var(--serif); }
+.group.t-strong { color: var(--strong); } .group.t-likely { color: var(--likely); } .group.t-watch { color: var(--watch); }
+.group-head .c { font-weight: 500; }
+.pt { border-bottom: 1px solid var(--line); color: var(--ink); border-radius: 10px; transition: background-color .25s cubic-bezier(.16,1,.3,1), box-shadow .25s cubic-bezier(.16,1,.3,1); }
+.pt[open] { background: #fff; border-bottom-color: transparent; box-shadow: 0 1px 2px rgba(40,32,16,.05), 0 10px 28px -14px rgba(40,32,16,.18); margin: 6px 0; }
+.pt > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 56px minmax(0, 1fr) 16px; gap: 4px 16px; align-items: center; padding: 14px 12px; border-radius: 10px; }
+.pt > summary::-webkit-details-marker { display: none; }
+.pt:not([open]) > summary:hover { background: var(--tint); }
+.pt .tm { font-weight: 600; line-height: 1.4; }
+.pt .tm span { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.pt .who { font-weight: 600; }
+.pt .rule { display: inline-block; margin-left: 8px; padding: 0 8px; border-radius: 999px; font-size: 12px; line-height: 1.7; color: var(--ink); background: var(--watch-bg); }
+.t-strong .rule { background: var(--strong-bg); } .t-likely .rule { background: var(--likely-bg); }
+.pt .what { font-size: 15px; line-height: 1.6; }
+.pt .chev { color: var(--muted); display: grid; place-items: center; transition: transform .25s cubic-bezier(.16,1,.3,1); }
+.pt[open] .chev { transform: rotate(180deg); }
+.pt-body { padding: 4px 12px 24px 84px; display: grid; gap: 18px; min-width: 0; }
+.pt-body ul { padding-left: 20px; display: grid; gap: 4px; }
+.pt-body li { padding-left: 2px; }
+.evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.fig { display: grid; gap: 6px; text-align: left; background: none; border: 0; padding: 0; cursor: zoom-in; align-content: start; }
+.fig .frame { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; line-height: 0; box-shadow: 0 1px 2px rgba(40,32,16,.05), 0 6px 16px -8px rgba(40,32,16,.16); transition: box-shadow .25s cubic-bezier(.16,1,.3,1), transform .25s cubic-bezier(.16,1,.3,1); }
+.fig:hover .frame { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(40,32,16,.06), 0 14px 28px -12px rgba(40,32,16,.24); }
+.fig img { width: 100%; height: auto; display: block; }
+.fig .cap { font-size: 14px; }
+.fig .cap b { font-weight: 600; }
+.note-block { display: grid; gap: 2px; }
+.note-block .k { font-weight: 600; font-size: 14px; }
+.more > summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.more ul { margin-top: 8px; }
+.empty { padding: 28px 0; color: var(--muted); }
+
+/* collapsed supporting rows */
+.fold { display: grid; }
+.fold > details { border-top: 1px solid var(--line); }
+.fold > details:last-child { border-bottom: 1px solid var(--line); }
+.fold > details > summary { list-style: none; cursor: pointer; padding: 16px 0; display: flex; justify-content: space-between; gap: 12px; font-weight: 500; }
+.fold > details > summary::-webkit-details-marker { display: none; }
+.fold > details > summary::after { content: ""; width: 8px; height: 8px; margin: 8px 4px 0 0; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: rotate(45deg); transition: transform .25s cubic-bezier(.16,1,.3,1); flex: none; }
+.fold > details > summary:hover { color: var(--ink); }
+.fold > details[open] > summary::after { transform: translateY(4px) rotate(-135deg); }
+.fold .panel { padding: 0 0 24px; display: grid; gap: 14px; min-width: 0; }
+.fold ul { padding-left: 20px; display: grid; gap: 4px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 440px; }
+th, td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 500; font-size: 14px; color: var(--muted); }
+td.r, th.r { text-align: right; padding-right: 0; padding-left: 14px; }
+tr:last-child td { border-bottom: 0; }
+.cnt { display: inline-flex; gap: 10px; }
+.cnt .strong { color: var(--strong); } .cnt .likely { color: var(--likely); } .cnt .watch { color: var(--watch); }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart text { fill: var(--muted); font: 11px var(--font); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 8px; font-size: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13px; padding: 4px 10px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.gallery .fig .cap { font-size: 12px; }
+
+.lightbox { position: fixed; inset: 0; z-index: 20; background: rgba(15,18,25,.88); display: grid; grid-template-rows: auto 1fr;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.lightbox .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #fff; padding-bottom: 10px; }
+.lightbox button { background: #fff; color: #111; border: 0; border-radius: var(--r); padding: 6px 16px; min-height: 40px; cursor: pointer; }
+.lightbox .nav { display: flex; align-items: center; gap: 8px; }
+.lightbox .nav button { min-width: 44px; padding: 6px 12px; display: inline-grid; place-items: center; }
+.lightbox button:disabled { opacity: .35; cursor: default; }
+.lightbox .stage { position: relative; overflow: hidden; display: grid; place-items: center; min-height: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+.lightbox .frame { position: relative; transform-origin: 0 0; will-change: transform; cursor: zoom-in; }
+.lightbox .frame.zoomed { cursor: grab; }
+.lightbox img { display: block; width: 100%; height: 100%; border-radius: var(--r); -webkit-user-drag: none; pointer-events: none; }
+.lightbox .hl { position: absolute; left: 0; right: 0; outline: 3px solid #f5b301; outline-offset: -3px; background: rgba(245,179,1,.14); }
+
+@media (max-width: 640px) {
+  .wrap { gap: 44px; padding-block: 24px 72px; }
+  .tiers { grid-template-columns: 1fr; }
+  .tier:first-child { border-top: 0; }
+  .tier, .tier + .tier { padding: 14px 18px; border-left: 0; border-top: 1px solid var(--line); grid-template-columns: 56px 1fr; column-gap: 12px; }
+  .tier .n { grid-row: span 2; font-size: 36px; }
+  .pt > summary { grid-template-columns: 48px minmax(0, 1fr) 16px; }
+  .pt-body { padding-left: 12px; }
+  .evidence { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap" id="app">
+  <header class="verdict" id="verdict">
+    <div class="lead">
+      <p class="muted small" id="scope"></p>
+      <h1 id="h1">ผลตรวจจุดต้องสงสัย</h1>
+      <p id="sub" style="font-size:18px"></p>
+    </div>
+    <div class="teams" id="teams" hidden></div>
+    <div class="tiers" id="tiers"></div>
+    <div>
+      <p class="muted small">เป็นข้อสังเกตจากตัวเลขที่แคปไว้เป็นช่วงๆ ไม่ใช่ข้อสรุปว่าใครทำผิด ชื่อสมาชิกใช้ชื่อสัตว์แทน</p>
+    </div>
+  </header>
+
+  <section aria-labelledby="s-points">
+    <div class="sec-head"><h2 id="s-points">จุดต้องสงสัยทั้งหมด</h2><div class="filters" id="filters"></div></div>
+    <p class="muted small" style="margin-top:12px">กดที่แถวเพื่อดูภาพหลักฐานและเหตุผลที่เป็นไปได้แบบปกติ</p>
+    <div id="groups"></div>
+  </section>
+
+  <section aria-labelledby="s-chart">
+    <h2 id="s-chart">ก้าวสะสมตามเวลา</h2>
+    <p class="muted small" style="margin:4px 0 12px">ก้าวสะสมของสมาชิกแต่ละคนจากภาพที่แคปไว้ กดวงกลมเพื่อไปดูจุดนั้น</p>
+    <div class="chart" id="chart"></div>
+  </section>
+
+  <section aria-labelledby="s-more" class="fold" id="fold">
+    <h2 id="s-more" style="margin-bottom:12px">ข้อมูลประกอบ</h2>
+    <details><summary>สมาชิกแต่ละคน</summary><div class="panel"><div class="tablewrap"><table id="people"></table></div></div></details>
+    <details><summary>ข้อมูลที่ไม่นับเป็นจุด</summary><div class="panel" id="context"></div></details>
+    <details><summary>ข้อจำกัดของข้อมูล</summary><div class="panel" id="limits"></div></details>
+    <details><summary>วิธีตรวจและเกณฑ์</summary><div class="panel" id="method"></div></details>
+    <details><summary id="gal-title">ภาพทั้งหมด</summary><div class="panel"><div class="gallery" id="gallery"></div></div></details>
+  </section>
+</div>
+
+<div class="lightbox" id="lb" hidden role="dialog" aria-modal="true" aria-label="ภาพหลักฐาน">
+  <div class="bar"><span><span id="lbcap"></span><br><span id="lbhint" class="small" style="opacity:.75"></span></span><div class="nav"><button type="button" id="lbprev" aria-label="ภาพก่อนหน้า"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span id="lbpos" class="small"></span><button type="button" id="lbnext" aria-label="ภาพถัดไป"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button type="button" id="lbclose">ปิด</button></div></div>
+  <div class="stage"><div class="frame" id="lbframe"></div></div>
+</div>
+
+<script id="data" type="application/json">{"teams":[{"id":"t01","label":"ทีม 1","period":"24 ต.ค. 07:39 ถึง 24 ต.ค. 22:30","days":1,"n_images":74,"counts":{"strong":5,"likely":6,"watch":2},"n_points":13,"n_people":5,"n_members":6,"team_avg":53383,"adj_strict":53000,"adj_soft":52083,"points":[{"alias":"Alpaca","rule":"R1","rule_th":"ยอดสะสมลดลง","date":"24 ต.ค.","time":"09:48","sort":"2026-10-24 09:48","head":"kcal สะสมลดจาก 3,234 เหลือ 3,208 (-26)","key":["ช่วงเดียวกันก้าวเปลี่ยน +2,000","เห็นค่าที่ต่ำลงนี้ 4 ครั้ง","ต่อมากลับขึ้นเป็น 3,250"],"more":[],"id":"R1-Alpaca-1024.0","tier":"strong","innocent":"app คำนวณ kcal ใหม่ย้อนหลัง หรือตัดข้อมูลซ้ำ แล้ว sync ค่าใหม่","images":[{"id":"r01-F62C","label":"ก่อน","when":"24 ต.ค. 07:39","time":"07:39","crop":"img/c/r01-F62C-Alpaca.jpg","card":[0.1177,0.3322]},{"id":"r01-F788","label":"หลัง","when":"24 ต.ค. 09:48","time":"09:48","crop":"img/c/r01-F788-Alpaca.jpg","card":[0.1004,0.3156]},{"id":"r01-C1DC","label":"ค่ากลับมา","when":"24 ต.ค. 12:06","time":"12:06","crop":"img/c/r01-C1DC-Alpaca.jpg","card":[0.1176,0.332]}],"ai":"kcal ที่ต่ำลงถูกเห็นซ้ำ 4 ครั้งแล้วค่อยกลับขึ้น อาจเป็นเพราะ app คำนวณ kcal ใหม่หลัง sync ถ้าแคปภาพหน้ารายละเอียดกิจกรรมของช่วงนี้เพิ่ม จะช่วยยืนยันได้"},{"alias":"Reindeer","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"11:04","sort":"2026-10-24 11:04","head":"28,900 → 36,300 ก้าว (+7,400 ใน 33 นาที)","key":["แคปภาพห่างกัน 18 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 33 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 214.7 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → แทบเป็นไปไม่ได้"],"more":["เทียบเท่าระยะราว 5.18 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 67 นาที","ก้าวส่วนเกิน 500 ก้าว (เพดาน 200 ก้าว/นาที) หรือ 2,200 ก้าว (เพดาน 150 ก้าว/นาที)"],"id":"R2-Reindeer-1024.0","tier":"strong","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r01-6AC0","label":"ก่อน","when":"24 ต.ค. 10:46","time":"10:46","crop":"img/c/r01-6AC0-Reindeer.jpg","card":[0.8407,0.9171]},{"id":"r01-D652","label":"หลัง","when":"24 ต.ค. 11:04","time":"11:04","crop":"img/c/r01-D652-Reindeer.jpg","card":[0.5486,0.7651]}],"ai":"ก้าวขึ้นเกินที่คนเดินวิ่งต่อเนื่องจะทำได้แม้คิดแบบ best case เหตุผลแบบปกติที่พอเข้ากันคือ sync ค้างแล้วมาครบทีเดียว แต่ยอดนี้สูงเกินกว่าจะอธิบายได้ง่าย ต้องดูแคปภาพที่ถี่ขึ้นช่วงสายวันนั้น หรือบันทึกกิจกรรมจากนาฬิกาเพื่อเทียบ"},{"alias":"Panda","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"18:58","sort":"2026-10-24 18:58","head":"37,400 → 40,400 ก้าว (+3,000 ใน 16 นาที)","key":["แคปภาพห่างกัน 6 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 16 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 170.6 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → ต้องวิ่งต่อเนื่อง","kcal ต่อก้าวช่วงนี้เป็น 0.484× ของค่ากลางกลุ่ม ซึ่งต่ำสำหรับคนวิ่ง จึงยกระดับขึ้น 1 ขั้น"],"more":["เทียบเท่าระยะราว 2.1 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 27 นาที","ช่วงเดียวกัน kcal เพิ่ม +60","ก้าวส่วนเกิน 0 ก้าว (เพดาน 200 ก้าว/นาที) หรือ 350 ก้าว (เพดาน 150 ก้าว/นาที)"],"id":"R2-Panda-1024.1","tier":"strong","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r02-0AC7","label":"ก่อน","when":"24 ต.ค. 18:52","time":"18:52","crop":"img/c/r02-0AC7-Panda.jpg","card":[0.7649,0.9752]},{"id":"r02-3179","label":"หลัง","when":"24 ต.ค. 18:58","time":"18:58","crop":"img/c/r02-3179-Panda.jpg","card":[0.7645,0.9752]}],"ai":"ในช่วงนี้ต้องวิ่งต่อเนื่องจึงจะได้ตามนี้ และ kcal ต่อก้าวต่ำกว่าค่ากลางกลุ่ม อาจเป็นเพราะเครื่องคำนวณ kcal จากแหล่งต่างจากคนอื่น ถ้าขอบันทึกการวิ่ง (ระยะทาง เวลา) จากนาฬิกาหรือ app วิ่งมาเทียบ จะแยกได้ว่าวิ่งจริงหรือไม่"},{"alias":"Koala","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"20:14","sort":"2026-10-24 20:14","head":"35,600 → 46,200 ก้าว (+10,600 ใน 45 นาที)","key":["แคปภาพห่างกัน 30 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 45 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 228.3 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → แทบเป็นไปไม่ได้","แคปภาพก่อนและหลังห่างกันเกิน 20 นาที จึงให้ความมั่นใจสูงสุดแค่ระดับกลาง"],"more":["เทียบเท่าระยะราว 7.42 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 96 นาที","ช่วงเดียวกัน kcal เพิ่ม +681","ก้าวส่วนเกิน 1,300 ก้าว (เพดาน 200 ก้าว/นาที) หรือ 3,600 ก้าว (เพดาน 150 ก้าว/นาที)"],"id":"R2-Koala-1024.1","tier":"strong","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r02-29AC","label":"ก่อน","when":"24 ต.ค. 19:44","time":"19:44","crop":"img/c/r02-29AC-Koala.jpg","card":[0.7364,1]},{"id":"r02-B22E","label":"หลัง","when":"24 ต.ค. 20:14","time":"20:14","crop":"img/c/r02-B22E-Koala.jpg","card":[0.5485,0.7644]}],"ai":"แคปภาพห่างกัน 30 นาที ช่วงนี้จึงอาจมีหลายรอบเดินสะสมกันก่อน sync แต่ตัวเลขยังสูงเกินกว่าจะเป็นแบบนั้นล้วนๆ ข้อมูลที่ช่วยได้คือแคปภาพที่ถี่ขึ้นก่อนเวลานี้ หรือบันทึกกิจกรรมของวันนั้น"},{"alias":"Tiger","rule":"R1","rule_th":"ยอดสะสมลดลง","date":"24 ต.ค.","time":"21:42","sort":"2026-10-24 21:42","head":"kcal สะสมลดจาก 4,997 เหลือ 4,939 (-58)","key":["ช่วงเดียวกันก้าวเปลี่ยน +100","เห็นค่าที่ต่ำลงนี้ 2 ครั้ง","ต่อมากลับขึ้นเป็น 5,023"],"more":[],"id":"R1-Tiger-1024.0","tier":"strong","innocent":"app คำนวณ kcal ใหม่ย้อนหลัง หรือตัดข้อมูลซ้ำ แล้ว sync ค่าใหม่","images":[{"id":"r03-0890","label":"ก่อน","when":"24 ต.ค. 21:25","time":"21:25","crop":"img/c/r03-0890-Tiger.jpg","card":[0.7418,1]},{"id":"r03-4EC0","label":"หลัง","when":"24 ต.ค. 21:42","time":"21:42","crop":"img/c/r03-4EC0-Tiger.jpg","card":[0.7352,1]},{"id":"r03-A271","label":"ค่ากลับมา","when":"24 ต.ค. 22:13","time":"22:13","crop":"img/c/r03-A271-Tiger.jpg","card":[0.7499,1]}],"ai":"kcal ลดแล้วกลับขึ้นสูงกว่าเดิม ก้าวแทบไม่เปลี่ยน อาจเป็นเพราะ app ปรับค่า kcal ใหม่ ซึ่งเป็นเหตุผลที่เป็นไปได้แบบปกติ ถ้ามีแคปภาพอีกภาพช่วงเวลาใกล้กัน จะช่วยยืนยันได้"},{"alias":"Alpaca","rule":"R6","rule_th":"ก้าวกับ kcal ไม่ขยับพร้อมกัน","date":"24 ต.ค.","time":"12:03","sort":"2026-10-24 12:03","head":"ก้าว +4,300 แต่ kcal เปลี่ยน -5","key":["ก้าว 42,500 → 46,800 kcal คงที่ราว 3,234","kcal ไม่ขยับ 135 นาทีหลังก้าวเพิ่ม (นานกว่า 15 นาทีที่ app อาจแสดงช้า จึงไม่ใช่แค่ sync ช้า)"],"more":[],"id":"R6-Alpaca-1024.0","tier":"likely","innocent":"ก้าวกับ kcal มาจากคนละแหล่งหรือ sync คนละเวลา เช่น ก้าวจากโทรศัพท์ แต่ kcal จากนาฬิกาที่ยังไม่ sync","images":[{"id":"r01-F62C","label":"ก่อน","when":"24 ต.ค. 07:39","time":"07:39","crop":"img/c/r01-F62C-Alpaca.jpg","card":[0.1177,0.3322]},{"id":"r01-4107","label":"หลัง","when":"24 ต.ค. 12:03","time":"12:03","crop":"img/c/r01-4107-Alpaca.jpg","card":[0.1175,0.332]}],"ai":"ก้าวเพิ่มแต่ kcal นิ่งนานเกิน sync ช้า และ kcal ต่อก้าวของ Alpaca ต่ำมากเทียบกลุ่ม อาจเป็นเพราะมือถือหรือนาฬิกาบันทึก kcal จากแหล่งอื่น ถ้ามีเครื่องมือปลอมก้าวก็เข้ากับรูปแบบนี้ได้เช่นกัน ถ้าดูหน้า kcal และก้าวของอุปกรณ์ที่ใช้อยู่ จะช่วยแยกได้"},{"alias":"Reindeer","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"14:21","sort":"2026-10-24 14:21","head":"38,100 → 39,900 ก้าว (+1,800 ใน 5 นาที)","key":["แคปภาพห่างกัน 5 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 5 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 283.3 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → แทบเป็นไปไม่ได้","ค่าก่อนหน้าเห็นแค่ภาพเดียว อาจเป็นค่าที่ sync มาไม่ครบ จึงให้ความมั่นใจต่ำ","kcal ต่อก้าวช่วงนี้เป็น 0.498× ของค่ากลางกลุ่ม ซึ่งต่ำสำหรับคนวิ่ง จึงยกระดับขึ้น 1 ขั้น"],"more":["เทียบเท่าระยะราว 1.26 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 16 นาที","ช่วงเดียวกัน kcal เพิ่ม +37","ก้าวส่วนเกิน 500 ก้าว (เพดาน 200 ก้าว/นาที) หรือ 800 ก้าว (เพดาน 150 ก้าว/นาที)"],"id":"R2-Reindeer-1024.1","tier":"likely","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r01-E250","label":"ก่อน","when":"24 ต.ค. 14:16","time":"14:16","crop":"img/c/r01-E250-Reindeer.jpg","card":[0.5484,0.7642]},{"id":"r01-2A6A","label":"หลัง","when":"24 ต.ค. 14:21","time":"14:21","crop":"img/c/r01-2A6A-Reindeer.jpg","card":[0.5493,0.7644]}],"ai":"ช่วงนี้เห็นค่าก่อนหน้าแค่ภาพเดียว อาจเป็นค่าที่ sync มาไม่ครบแล้วค่อยตามทีหลัง ถ้ามีแคปภาพก่อนหน้านี้อีกภาพ จะบอกได้ชัดขึ้น"},{"alias":"Alpaca","rule":"R6","rule_th":"ก้าวกับ kcal ไม่ขยับพร้อมกัน","date":"24 ต.ค.","time":"15:02","sort":"2026-10-24 15:02","head":"ก้าว +3,500 แต่ kcal เปลี่ยน +0","key":["ก้าว 47,600 → 51,100 kcal คงที่ราว 3,250","kcal ไม่ขยับ 46 นาทีหลังก้าวเพิ่ม (นานกว่า 15 นาทีที่ app อาจแสดงช้า จึงไม่ใช่แค่ sync ช้า)"],"more":[],"id":"R6-Alpaca-1024.1","tier":"likely","innocent":"ก้าวกับ kcal มาจากคนละแหล่งหรือ sync คนละเวลา เช่น ก้าวจากโทรศัพท์ แต่ kcal จากนาฬิกาที่ยังไม่ sync","images":[{"id":"r01-C1DC","label":"ก่อน","when":"24 ต.ค. 12:06","time":"12:06","crop":"img/c/r01-C1DC-Alpaca.jpg","card":[0.1176,0.332]},{"id":"r01-1394","label":"หลัง","when":"24 ต.ค. 15:02","time":"15:02","crop":"img/c/r01-1394-Alpaca.jpg","card":[0.1176,0.3322]}],"ai":"รูปแบบก้าวเพิ่ม kcal นิ่งเกิดซ้ำจากจุดก่อนหน้า ข้อมูลชี้ว่าเป็นแหล่งบันทึก kcal ที่ต่างกันได้พอๆ กับเครื่องมือเพิ่มก้าว ถ้าเทียบกับ kcal จากนาฬิกาหรือ app สุขภาพอีกตัว จะแยกกันได้"},{"alias":"Reindeer","rule":"R6","rule_th":"ก้าวกับ kcal ไม่ขยับพร้อมกัน","date":"24 ต.ค.","time":"20:35","sort":"2026-10-24 20:35","head":"ก้าว +2,500 แต่ kcal เปลี่ยน +1","key":["ก้าว 39,900 → 42,400 kcal คงที่ราว 3,416","kcal ไม่ขยับ 194 นาทีหลังก้าวเพิ่ม (นานกว่า 15 นาทีที่ app อาจแสดงช้า จึงไม่ใช่แค่ sync ช้า)"],"more":[],"id":"R6-Reindeer-1024.0","tier":"likely","innocent":"ก้าวกับ kcal มาจากคนละแหล่งหรือ sync คนละเวลา เช่น ก้าวจากโทรศัพท์ แต่ kcal จากนาฬิกาที่ยังไม่ sync","images":[{"id":"r01-2A6A","label":"ก่อน","when":"24 ต.ค. 14:21","time":"14:21","crop":"img/c/r01-2A6A-Reindeer.jpg","card":[0.5493,0.7644]},{"id":"r02-89B7","label":"หลัง","when":"24 ต.ค. 20:35","time":"20:35","crop":"img/c/r02-89B7-Reindeer.jpg","card":[0.5226,0.7385]}],"ai":"ก้าวเพิ่มแต่ kcal นิ่งนานกว่าที่ sync จะช้าได้ อาจเป็นเพราะ kcal มาจากแหล่งอื่นเหมือนกรณี kcal ต่อก้าวต่ำของ Reindeer ถ้าเทียบกับ kcal จากนาฬิกาในช่วงเวลาเดียวกัน จะช่วยแยกกรณีได้"},{"alias":"Reindeer","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"21:09","sort":"2026-10-24 21:09","head":"42,400 → 50,700 ก้าว (+8,300 ใน 49 นาที)","key":["แคปภาพห่างกัน 34 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 49 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 164.0 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → ต้องวิ่งต่อเนื่อง","แคปภาพก่อนและหลังห่างกันเกิน 20 นาที จึงให้ความมั่นใจสูงสุดแค่ระดับกลาง"],"more":["เทียบเท่าระยะราว 5.81 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 75 นาที","ช่วงเดียวกัน kcal เพิ่ม +213","ก้าวส่วนเกิน 0 ก้าว (เพดาน 200 ก้าว/นาที) หรือ 700 ก้าว (เพดาน 150 ก้าว/นาที)"],"id":"R2-Reindeer-1024.2","tier":"likely","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r02-89B7","label":"ก่อน","when":"24 ต.ค. 20:35","time":"20:35","crop":"img/c/r02-89B7-Reindeer.jpg","card":[0.5226,0.7385]},{"id":"r03-0DF2","label":"หลัง","when":"24 ต.ค. 21:09","time":"21:09","crop":"img/c/r03-0DF2-Reindeer.jpg","card":[0.0865,0.3022]}],"ai":"แคปภาพห่างกัน 34 นาที ช่วงนี้อาจมีหลายรอบเดินสะสมกัน และ kcal เพิ่มจริงบ้าง จุดนี้จึงเบากว่าจุดแรกของ Reindeer ถ้ามีแคปภาพกลางช่วง 21:09 หรือบันทึกกิจกรรม จะช่วยยืนยันได้"},{"alias":"Alpaca","rule":"R6","rule_th":"ก้าวกับ kcal ไม่ขยับพร้อมกัน","date":"24 ต.ค.","time":"22:30","sort":"2026-10-24 22:30","head":"ก้าว +4,700 แต่ kcal เปลี่ยน +0","key":["ก้าว 57,700 → 62,400 kcal คงที่ราว 3,319","kcal ไม่ขยับ 218 นาทีหลังก้าวเพิ่ม (นานกว่า 15 นาทีที่ app อาจแสดงช้า จึงไม่ใช่แค่ sync ช้า)"],"more":[],"id":"R6-Alpaca-1024.2","tier":"likely","innocent":"ก้าวกับ kcal มาจากคนละแหล่งหรือ sync คนละเวลา เช่น ก้าวจากโทรศัพท์ แต่ kcal จากนาฬิกาที่ยังไม่ sync","images":[{"id":"r02-4401","label":"ก่อน","when":"24 ต.ค. 17:34","time":"17:34","crop":"img/c/r02-4401-Alpaca.jpg","card":[0.1179,0.3328]},{"id":"r03-1654","label":"หลัง","when":"24 ต.ค. 22:30","time":"22:30","crop":"img/c/r03-1654-Alpaca.jpg","card":[0.3321,0.5491]}],"ai":"เป็นครั้งที่ 3 ของรูปแบบเดียวกันของ Alpaca โดย kcal นิ่งนาน 218 นาที เหตุผลแบบปกติที่เข้ากันที่สุดคือ kcal มาจากแหล่งอื่นที่ไม่อัปเดตตามก้าว ถ้ามีหน้าข้อมูลอุปกรณ์หรือบันทึกกิจกรรม จะแยกจากกรณีเครื่องมือเพิ่มก้าวได้"},{"alias":"Koala","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"10:46","sort":"2026-10-24 10:46","head":"23,400 → 32,200 ก้าว (+8,800 ใน 73 นาที)","key":["แคปภาพห่างกัน 58 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 73 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 117.6 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → เดินเร็ว/วิ่งเหยาะต่อเนื่อง","แคปภาพก่อนและหลังห่างกันเกิน 20 นาที จึงให้ความมั่นใจสูงสุดแค่ระดับกลาง"],"more":["เทียบเท่าระยะราว 6.16 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 80 นาที"],"id":"R2-Koala-1024.0","tier":"watch","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r01-F788","label":"ก่อน","when":"24 ต.ค. 09:48","time":"09:48","crop":"img/c/r01-F788-Koala.jpg","card":[0.8998,1]},{"id":"r01-6AC0","label":"หลัง","when":"24 ต.ค. 10:46","time":"10:46","crop":"img/c/r01-6AC0-Koala.jpg","card":[0.5486,0.7645]}],"ai":"แคปภาพห่างกัน 58 นาที ก้าวที่ได้ถือว่าเดินเร็วต่อเนื่อง และเป็นไปได้ถ้าเดินหรือวิ่งเหยาะจริงในช่วงนั้น ไม่มีข้อมูลน่าสงสัยเพิ่ม ถ้ามีแคปภาพกลางช่วงจะชัดขึ้น"},{"alias":"Panda","rule":"R2","rule_th":"ก้าวขึ้นเร็วมากในเวลาสั้น","date":"24 ต.ค.","time":"18:12","sort":"2026-10-24 18:12","head":"36,000 → 37,300 ก้าว (+1,300 ใน 6 นาที)","key":["แคปภาพห่างกัน 6 นาที และ app อาจจะ delay sync ช้าสุดประมาณ 15 นาที จึงนับว่าสะสมก้าวได้สูงสุด 6 นาที","ถ้าเดินวิ่งไม่หยุดทั้งช่วง ต้องได้อย่างน้อย 171.4 ก้าว/นาที (best case คือคิดเข้าข้างผู้เล่นที่สุดแล้ว) → ต้องวิ่งต่อเนื่อง","ค่าก่อนหน้าเห็นแค่ภาพเดียว อาจเป็นค่าที่ sync มาไม่ครบ จึงให้ความมั่นใจต่ำ"],"more":["เทียบเท่าระยะราว 0.91 กม. หรือเดินเร็ว (110 ก้าว/นาที) ประมาณ 12 นาที","ช่วงเดียวกัน kcal เพิ่ม +62","ก้าวส่วนเกิน 0 ก้าว (เพดาน 200 ก้าว/นาที) หรือ 150 ก้าว (เพดาน 150 ก้าว/นาที)"],"id":"R2-Panda-1024.0","tier":"watch","innocent":"ออกไปวิ่งจริงต่อเนื่องทั้งช่วง หรือ app sync ช้ากว่า 15 นาที (ปิด app ปิดเครื่อง สัญญาณหาย) ก้าวช่วงก่อนหน้าจึงขึ้นมาพร้อมกัน","images":[{"id":"r02-4A69","label":"ก่อน","when":"24 ต.ค. 18:06","time":"18:06","crop":"img/c/r02-4A69-Panda.jpg","card":[0.2651,0.4808]},{"id":"r02-980D","label":"หลัง","when":"24 ต.ค. 18:12","time":"18:12","crop":"img/c/r02-980D-Panda.jpg","card":[0.2661,0.4809]}],"ai":"ค่าก่อนหน้าเห็นแค่ภาพเดียว อาจเป็นค่าที่ sync มาไม่ครบ และก้าวส่วนเกินก็น้อยมาก ถ้ามีแคปภาพก่อนหน้าอีกภาพจะช่วยยืนยันได้ จุดนี้อยู่ใกล้กับอีกจุดของ Panda ช่วงเย็นด้วย"}],"support":[{"alias":"Alpaca","rule":"R5","rule_th":"kcal ต่อก้าวต่างจากคนอื่นมาก","date":"24 ต.ค.","time":"22:30","sort":"2026-10-24 22:30","head":"kcal ต่อก้าว 0.0043 = 0.1× ของค่ากลางกลุ่ม (0.0413)","key":["ทั้งวันก้าวเพิ่ม +19,900 kcal เพิ่ม +85","เกณฑ์: ต่ำกว่า 0.5× หรือสูงกว่า 2×"],"more":[]},{"alias":"Reindeer","rule":"R5","rule_th":"kcal ต่อก้าวต่างจากคนอื่นมาก","date":"24 ต.ค.","time":"22:30","sort":"2026-10-24 22:30","head":"kcal ต่อก้าว 0.0206 = 0.5× ของค่ากลางกลุ่ม (0.0413)","key":["ทั้งวันก้าวเพิ่ม +14,400 kcal เพิ่ม +296","เกณฑ์: ต่ำกว่า 0.5× หรือสูงกว่า 2×"],"more":[]}],"info":[{"alias":"Panda","rule":"R1","rule_th":"ยอดสะสมลดลง","date":"24 ต.ค.","time":"22:17","sort":"2026-10-24 22:17","head":"kcal สะสมลดจาก 4,280 เหลือ 4,277 (-3)","key":["ช่วงเดียวกันก้าวเปลี่ยน +0","เห็นค่าที่ต่ำลงนี้ 1 ครั้ง","ต่อมากลับขึ้นเป็น 4,288","ลดไม่เกิน 10 ขณะที่ก้าวไม่เปลี่ยน แล้วกลับขึ้น น่าจะเป็น app คำนวณใหม่"],"more":[]},{"alias":"Koala","rule":"R10","rule_th":"เข้าร่วมในนาทีเดียวกับอีกคน","date":"24 ต.ค.","time":"10:46","sort":"2026-10-24 10:46","head":"เวลาเข้าร่วมตรงกันถึงนาทีกับ Reindeer","key":["เป็นข้อมูลประกอบ ไม่แสดงเวลาจริงเพื่อความเป็นส่วนตัว"],"more":[]},{"alias":"Reindeer","rule":"R10","rule_th":"เข้าร่วมในนาทีเดียวกับอีกคน","date":"24 ต.ค.","time":"11:04","sort":"2026-10-24 11:04","head":"เวลาเข้าร่วมตรงกันถึงนาทีกับ Koala","key":["เป็นข้อมูลประกอบ ไม่แสดงเวลาจริงเพื่อความเป็นส่วนตัว"],"more":[]}],"members":[{"alias":"Alpaca","steps":62400,"excess":{"strict":0,"soft":0},"counts":{"strong":1,"likely":3,"watch":0},"series":[["2026-10-24","07:39",42500,3234,"r01-F62C"],["2026-10-24","09:48",44500,3208,"r01-F788"],["2026-10-24","10:46",46800,3229,"r01-6AC0"],["2026-10-24","11:04",46800,3229,"r01-D652"],["2026-10-24","12:03",46800,3229,"r01-4107"],["2026-10-24","12:06",47600,3250,"r01-C1DC"],["2026-10-24","12:26",47600,3250,"r01-AAF2"],["2026-10-24","12:41",47600,3250,"r01-7233"],["2026-10-24","14:16",51100,3250,"r01-E250"],["2026-10-24","14:21",51100,3250,"r01-2A6A"],["2026-10-24","14:24",51100,3250,"r01-86AF"],["2026-10-24","14:27",51100,3250,"r01-14A7"],["2026-10-24","14:28",51100,null,"r01-B51A"],["2026-10-24","14:30",51100,null,"r01-3519"],["2026-10-24","14:32",51100,null,"r01-D710"],["2026-10-24","14:42",51100,3250,"r01-DBA3"],["2026-10-24","15:02",51100,3250,"r01-1394"],["2026-10-24","16:15",56200,3303,"r01-2B33"],["2026-10-24","16:34",56200,3303,"r02-6975"],["2026-10-24","16:37",56200,3303,"r02-A2B6"],["2026-10-24","17:02",56200,3303,"r02-463A"],["2026-10-24","17:21",56200,3303,"r02-A6F1"],["2026-10-24","17:34",57700,3319,"r02-4401"],["2026-10-24","18:06",57700,3319,"r02-9E18"],["2026-10-24","18:12",57700,3319,"r02-C42D"],["2026-10-24","18:20",57700,3319,"r02-05C5"],["2026-10-24","18:42",57700,3319,"r02-EB75"],["2026-10-24","18:49",57700,3319,"r02-9FDA"],["2026-10-24","18:52",59800,3319,"r02-0AC7"],["2026-10-24","18:58",59800,3319,"r02-3179"],["2026-10-24","19:05",59800,3319,"r02-6771"],["2026-10-24","19:22",59800,3319,"r02-88F7"],["2026-10-24","19:26",59800,3319,"r02-8B20"],["2026-10-24","19:40",59800,3319,"r02-7E71"],["2026-10-24","19:44",59800,3319,"r02-A815"],["2026-10-24","20:14",59800,3319,"r02-B22E"],["2026-10-24","20:19",62200,3319,"r02-5DE9"],["2026-10-24","20:25",62200,3319,"r02-7FC2"],["2026-10-24","20:35",62200,3319,"r02-EA1B"],["2026-10-24","21:09",62400,3319,"r03-7224"],["2026-10-24","21:25",62400,3319,"r03-6416"],["2026-10-24","21:42",62400,3319,"r03-7D8B"],["2026-10-24","21:51",62400,3319,"r03-A714"],["2026-10-24","22:13",62400,3319,"r03-E54E"],["2026-10-24","22:17",62400,3319,"r03-79E2"],["2026-10-24","22:25",62400,3319,"r03-92CD"],["2026-10-24","22:30",62400,3319,"r03-1654"]]},{"alias":"Capybara","steps":68100,"excess":{"strict":0,"soft":0},"counts":{"strong":0,"likely":0,"watch":0},"series":[["2026-10-24","07:39",35100,null,"r01-F62C"],["2026-10-24","09:48",38200,4927,"r01-F788"],["2026-10-24","10:46",40000,5005,"r01-6AC0"],["2026-10-24","11:04",40000,5005,"r01-D652"],["2026-10-24","12:03",43800,5199,"r01-4107"],["2026-10-24","12:06",43800,5199,"r01-C1DC"],["2026-10-24","12:26",43800,5199,"r01-AAF2"],["2026-10-24","12:41",45400,5266,"r01-7233"],["2026-10-24","14:16",46100,5310,"r01-E250"],["2026-10-24","14:21",46100,5310,"r01-2A6A"],["2026-10-24","14:24",46100,5310,"r01-86AF"],["2026-10-24","14:27",46100,5310,"r01-14A7"],["2026-10-24","14:28",46100,null,"r01-B51A"],["2026-10-24","14:30",46100,null,"r01-3519"],["2026-10-24","14:32",46100,null,"r01-D710"],["2026-10-24","14:42",47800,5402,"r01-DBA3"],["2026-10-24","15:02",49200,5447,"r01-1394"],["2026-10-24","16:15",51500,5567,"r01-2B33"],["2026-10-24","16:34",51600,5573,"r02-6975"],["2026-10-24","16:37",51600,5573,"r02-A2B6"],["2026-10-24","17:02",51600,5573,"r02-463A"],["2026-10-24","17:21",51600,5573,"r02-A6F1"],["2026-10-24","17:34",51700,5578,"r02-4401"],["2026-10-24","18:06",52200,5608,"r02-9E18"],["2026-10-24","18:12",52200,5608,"r02-C42D"],["2026-10-24","18:20",53800,5661,"r02-05C5"],["2026-10-24","18:42",55200,5720,"r02-EB75"],["2026-10-24","18:49",56100,5748,"r02-9FDA"],["2026-10-24","18:52",56100,5748,"r02-0AC7"],["2026-10-24","18:58",56100,5748,"r02-3179"],["2026-10-24","19:05",57100,5782,"r02-6771"],["2026-10-24","19:22",57800,5819,"r02-88F7"],["2026-10-24","19:26",58000,5829,"r02-8B20"],["2026-10-24","19:40",58700,5855,"r02-7E71"],["2026-10-24","19:44",58700,5855,"r02-A815"],["2026-10-24","20:14",59100,5885,"r02-B22E"],["2026-10-24","20:19",59100,5885,"r02-5DE9"],["2026-10-24","20:25",59100,5885,"r02-7FC2"],["2026-10-24","20:35",60400,5929,"r02-EA1B"],["2026-10-24","21:09",63200,6014,"r03-7224"],["2026-10-24","21:25",64600,6069,"r03-6416"],["2026-10-24","21:42",64600,6069,"r03-7D8B"],["2026-10-24","21:51",66300,6138,"r03-A714"],["2026-10-24","22:13",66300,6138,"r03-E54E"],["2026-10-24","22:17",66300,6138,"r03-79E2"],["2026-10-24","22:25",66300,6138,"r03-92CD"],["2026-10-24","22:30",68100,6254,"r03-1654"]]},{"alias":"Koala","steps":46800,"excess":{"strict":1300,"soft":3600},"counts":{"strong":1,"likely":0,"watch":1},"series":[["2026-10-24","07:39",23400,null,"r01-F62C"],["2026-10-24","09:48",23400,null,"r01-F788"],["2026-10-24","10:46",32200,3060,"r01-6AC0"],["2026-10-24","11:04",32200,null,"r01-D652"],["2026-10-24","12:03",32200,null,"r01-4107"],["2026-10-24","12:06",32200,null,"r01-C1DC"],["2026-10-24","12:26",32200,null,"r01-AAF2"],["2026-10-24","12:41",32200,null,"r01-7233"],["2026-10-24","14:16",35600,null,"r01-E250"],["2026-10-24","14:21",35600,null,"r01-2A6A"],["2026-10-24","14:24",35600,null,"r01-86AF"],["2026-10-24","14:27",35600,null,"r01-14A7"],["2026-10-24","14:28",35600,null,"r01-B51A"],["2026-10-24","14:30",35600,null,"r01-3519"],["2026-10-24","14:32",35600,null,"r01-D710"],["2026-10-24","14:42",35600,null,"r01-DBA3"],["2026-10-24","15:02",35600,null,"r01-1394"],["2026-10-24","16:15",35600,null,"r01-2B33"],["2026-10-24","16:34",35600,null,"r02-6975"],["2026-10-24","16:37",35600,null,"r02-A2B6"],["2026-10-24","17:02",35600,null,"r02-463A"],["2026-10-24","17:21",35600,3316,"r02-6130"],["2026-10-24","17:34",35600,3316,"r02-4401"],["2026-10-24","18:06",35600,3316,"r02-4A69"],["2026-10-24","18:12",35600,3316,"r02-980D"],["2026-10-24","18:20",35600,3316,"r02-51D4"],["2026-10-24","18:42",35600,3316,"r02-DE36"],["2026-10-24","18:49",35600,3316,"r02-F4E0"],["2026-10-24","18:52",35600,3316,"r02-693D"],["2026-10-24","18:58",35600,3316,"r02-95B4"],["2026-10-24","19:05",35600,3316,"r02-C1EF"],["2026-10-24","19:22",35600,3316,"r02-8F02"],["2026-10-24","19:26",35600,3316,"r02-1E0F"],["2026-10-24","19:40",35600,3316,"r02-DBE4"],["2026-10-24","19:44",35600,3316,"r02-29AC"],["2026-10-24","20:14",46200,3997,"r02-B22E"],["2026-10-24","20:19",46200,3997,"r02-5DE9"],["2026-10-24","20:25",46200,3997,"r02-6EC0"],["2026-10-24","20:35",46200,3997,"r02-89B7"],["2026-10-24","21:09",46200,3997,"r03-0DF2"],["2026-10-24","21:25",46200,3997,"r03-0890"],["2026-10-24","21:42",46800,4082,"r03-4EC0"],["2026-10-24","21:51",46800,4082,"r03-3188"],["2026-10-24","22:13",46800,4082,"r03-A271"],["2026-10-24","22:17",46800,4082,"r03-873C"],["2026-10-24","22:25",46800,4082,"r03-F97C"],["2026-10-24","22:30",46800,4082,"r03-CE5D"]]},{"alias":"Panda","steps":48200,"excess":{"strict":0,"soft":500},"counts":{"strong":1,"likely":0,"watch":1},"series":[["2026-10-24","07:39",26400,null,"r01-F62C"],["2026-10-24","09:48",30200,3599,"r01-F788"],["2026-10-24","10:46",32100,null,"r01-6AC0"],["2026-10-24","11:04",32600,null,"r01-D652"],["2026-10-24","12:03",33000,null,"r01-4107"],["2026-10-24","12:06",33000,null,"r01-C1DC"],["2026-10-24","12:26",33100,null,"r01-AAF2"],["2026-10-24","12:41",33100,null,"r01-7233"],["2026-10-24","14:16",33500,null,"r01-E250"],["2026-10-24","14:21",33800,null,"r01-2A6A"],["2026-10-24","14:24",34200,null,"r01-86AF"],["2026-10-24","14:27",34400,null,"r01-14A7"],["2026-10-24","14:28",34600,3807,"r01-B51A"],["2026-10-24","14:30",34700,3813,"r01-3519"],["2026-10-24","14:32",34800,3816,"r01-D710"],["2026-10-24","14:42",35100,null,"r01-DBA3"],["2026-10-24","15:02",35400,null,"r01-1394"],["2026-10-24","16:15",35400,null,"r01-2B33"],["2026-10-24","16:34",35400,null,"r02-6975"],["2026-10-24","16:37",35400,null,"r02-A2B6"],["2026-10-24","17:02",35400,null,"r02-463A"],["2026-10-24","17:21",35600,3846,"r02-6130"],["2026-10-24","17:34",35600,3846,"r02-604A"],["2026-10-24","18:06",36000,3867,"r02-4A69"],["2026-10-24","18:12",37300,3929,"r02-980D"],["2026-10-24","18:20",37300,3936,"r02-05C5"],["2026-10-24","18:42",37400,3939,"r02-DE36"],["2026-10-24","18:49",37400,3939,"r02-9FDA"],["2026-10-24","18:52",37400,3939,"r02-0AC7"],["2026-10-24","18:58",40400,3999,"r02-3179"],["2026-10-24","19:05",40400,3999,"r02-6771"],["2026-10-24","19:22",40900,4024,"r02-88F7"],["2026-10-24","19:26",41500,4046,"r02-1E0F"],["2026-10-24","19:40",42500,4083,"r02-7E71"],["2026-10-24","19:44",42800,4096,"r02-29AC"],["2026-10-24","20:14",44200,4127,"r02-B22E"],["2026-10-24","20:19",44400,4137,"r02-5DE9"],["2026-10-24","20:25",44900,4157,"r02-6EC0"],["2026-10-24","20:35",45200,4170,"r02-89B7"],["2026-10-24","21:09",47500,4253,"r03-0DF2"],["2026-10-24","21:25",48100,4273,"r03-0890"],["2026-10-24","21:42",48200,4280,"r03-4EC0"],["2026-10-24","21:51",48200,4280,"r03-3188"],["2026-10-24","22:13",48200,4280,"r03-A271"],["2026-10-24","22:17",48200,4277,"r03-79E2"],["2026-10-24","22:25",48200,4288,"r03-92CD"],["2026-10-24","22:30",48200,4288,"r03-1654"]]},{"alias":"Reindeer","steps":50700,"excess":{"strict":1000,"soft":3700},"counts":{"strong":1,"likely":3,"watch":0},"series":[["2026-10-24","07:39",27700,null,"r01-F62C"],["2026-10-24","09:48",28900,null,"r01-F788"],["2026-10-24","10:46",28900,null,"r01-6AC0"],["2026-10-24","11:04",36300,3334,"r01-D652"],["2026-10-24","12:03",36300,3334,"r01-4107"],["2026-10-24","12:06",36300,3334,"r01-C1DC"],["2026-10-24","12:26",36300,3334,"r01-AAF2"],["2026-10-24","12:41",36300,3334,"r01-7233"],["2026-10-24","14:16",38100,3379,"r01-E250"],["2026-10-24","14:21",39900,3416,"r01-2A6A"],["2026-10-24","14:24",39900,3416,"r01-86AF"],["2026-10-24","14:27",39900,3416,"r01-14A7"],["2026-10-24","14:28",39900,null,"r01-B51A"],["2026-10-24","14:30",39900,null,"r01-3519"],["2026-10-24","14:32",39900,null,"r01-D710"],["2026-10-24","14:42",39900,3416,"r01-DBA3"],["2026-10-24","15:02",39900,3416,"r01-1394"],["2026-10-24","16:15",39900,3416,"r01-2B33"],["2026-10-24","16:34",39900,3416,"r02-6975"],["2026-10-24","16:37",39900,3416,"r02-A2B6"],["2026-10-24","17:02",39900,3416,"r02-463A"],["2026-10-24","17:21",42400,3417,"r02-6130"],["2026-10-24","17:34",42400,3417,"r02-4401"],["2026-10-24","18:06",42400,3417,"r02-4A69"],["2026-10-24","18:12",42400,3417,"r02-980D"],["2026-10-24","18:20",42400,3417,"r02-05C5"],["2026-10-24","18:42",42400,3417,"r02-DE36"],["2026-10-24","18:49",42400,3417,"r02-9FDA"],["2026-10-24","18:52",42400,3417,"r02-0AC7"],["2026-10-24","18:58",42400,3417,"r02-3179"],["2026-10-24","19:05",42400,3417,"r02-6771"],["2026-10-24","19:22",42400,3417,"r02-88F7"],["2026-10-24","19:26",42400,3417,"r02-1E0F"],["2026-10-24","19:40",42400,3417,"r02-7E71"],["2026-10-24","19:44",42400,3417,"r02-29AC"],["2026-10-24","20:14",42400,3417,"r02-C446"],["2026-10-24","20:19",42400,3417,"r02-E672"],["2026-10-24","20:25",42400,3417,"r02-6EC0"],["2026-10-24","20:35",42400,3417,"r02-89B7"],["2026-10-24","21:09",50700,3630,"r03-0DF2"],["2026-10-24","21:25",50700,3630,"r03-0890"],["2026-10-24","21:42",50700,3630,"r03-4EC0"],["2026-10-24","21:51",50700,3630,"r03-3188"],["2026-10-24","22:13",50700,3630,"r03-A271"],["2026-10-24","22:17",50700,3630,"r03-79E2"],["2026-10-24","22:25",50700,3630,"r03-92CD"],["2026-10-24","22:30",50700,3630,"r03-1654"]]},{"alias":"Tiger","steps":44100,"excess":{"strict":0,"soft":0},"counts":{"strong":1,"likely":0,"watch":0},"series":[["2026-10-24","07:39",23800,null,"r01-F62C"],["2026-10-24","09:48",26200,null,"r01-F788"],["2026-10-24","10:46",26200,null,"r01-6AC0"],["2026-10-24","11:04",26200,null,"r01-D652"],["2026-10-24","12:03",27200,null,"r01-4107"],["2026-10-24","12:06",27200,null,"r01-C1DC"],["2026-10-24","12:26",28400,null,"r01-AAF2"],["2026-10-24","12:41",28400,null,"r01-7233"],["2026-10-24","14:16",32500,null,"r01-E250"],["2026-10-24","14:21",32500,null,"r01-2A6A"],["2026-10-24","14:24",32500,null,"r01-86AF"],["2026-10-24","14:27",32500,null,"r01-14A7"],["2026-10-24","14:28",32500,null,"r01-B51A"],["2026-10-24","14:30",32500,null,"r01-3519"],["2026-10-24","14:32",32500,null,"r01-D710"],["2026-10-24","14:42",32500,null,"r01-DBA3"],["2026-10-24","15:02",32500,null,"r01-1394"],["2026-10-24","16:15",33600,null,"r01-2B33"],["2026-10-24","16:34",33600,null,"r02-6975"],["2026-10-24","16:37",33600,null,"r02-A2B6"],["2026-10-24","17:02",33600,null,"r02-463A"],["2026-10-24","17:21",34300,4602,"r02-6130"],["2026-10-24","17:34",34300,4602,"r02-604A"],["2026-10-24","18:06",34300,4602,"r02-4A69"],["2026-10-24","18:12",34300,4602,"r02-980D"],["2026-10-24","18:20",34300,4602,"r02-51D4"],["2026-10-24","18:42",34300,4602,"r02-DE36"],["2026-10-24","18:49",34300,4602,"r02-F4E0"],["2026-10-24","18:52",34300,4602,"r02-693D"],["2026-10-24","18:58",34300,4602,"r02-95B4"],["2026-10-24","19:05",36100,4640,"r02-C1EF"],["2026-10-24","19:22",36100,4640,"r02-8F02"],["2026-10-24","19:26",36400,4662,"r02-1E0F"],["2026-10-24","19:40",37100,4701,"r02-DBE4"],["2026-10-24","19:44",37100,4727,"r02-29AC"],["2026-10-24","20:14",38400,4804,"r02-C446"],["2026-10-24","20:19",38400,4804,"r02-E672"],["2026-10-24","20:25",38700,4818,"r02-6EC0"],["2026-10-24","20:35",39600,4858,"r02-89B7"],["2026-10-24","21:09",42100,4974,"r03-0DF2"],["2026-10-24","21:25",42800,4997,"r03-0890"],["2026-10-24","21:42",42900,4939,"r03-4EC0"],["2026-10-24","21:51",42900,4939,"r03-3188"],["2026-10-24","22:13",43000,5023,"r03-A271"],["2026-10-24","22:17",43300,5023,"r03-873C"],["2026-10-24","22:25",43700,5067,"r03-F97C"],["2026-10-24","22:30",44100,5067,"r03-CE5D"]]}],"images":[{"id":"r01-F62C","when":"24 ต.ค. 07:39","cards":{"Alpaca":[0.1177,0.3322],"Capybara":[0.3322,0.4091],"Reindeer":[0.4091,0.4851],"Panda":[0.4851,0.5616],"Tiger":[0.5616,0.6373],"Koala":[0.6373,1]}},{"id":"r01-F788","when":"24 ต.ค. 09:48","cards":{"Alpaca":[0.1004,0.3156],"Capybara":[0.3156,0.5319],"Panda":[0.5319,0.7477],"Reindeer":[0.7477,0.8231],"Tiger":[0.8231,0.8998],"Koala":[0.8998,1]}},{"id":"r01-6AC0","when":"24 ต.ค. 10:46","cards":{"Alpaca":[0.1175,0.3324],"Capybara":[0.3324,0.5486],"Koala":[0.5486,0.7645],"Panda":[0.7645,0.8407],"Reindeer":[0.8407,0.9171],"Tiger":[0.9171,1]}},{"id":"r01-D652","when":"24 ต.ค. 11:04","cards":{"Alpaca":[0.1175,0.3326],"Capybara":[0.3326,0.5486],"Reindeer":[0.5486,0.7651],"Panda":[0.7651,0.8401],"Koala":[0.8401,0.9173],"Tiger":[0.9173,1]}},{"id":"r01-4107","when":"24 ต.ค. 12:03","cards":{"Alpaca":[0.1175,0.332],"Capybara":[0.332,0.5487],"Reindeer":[0.5487,0.7646],"Panda":[0.7646,0.8403],"Koala":[0.8403,0.9171],"Tiger":[0.9171,1]}},{"id":"r01-C1DC","when":"24 ต.ค. 12:06","cards":{"Alpaca":[0.1176,0.332],"Capybara":[0.332,0.5487],"Reindeer":[0.5487,0.7646],"Panda":[0.7646,0.8403],"Koala":[0.8403,0.9171],"Tiger":[0.9171,1]}},{"id":"r01-AAF2","when":"24 ต.ค. 12:26","cards":{"Alpaca":[0.1176,0.332],"Capybara":[0.332,0.5487],"Reindeer":[0.5487,0.765],"Panda":[0.765,0.8401],"Koala":[0.8401,0.9171],"Tiger":[0.9171,1]}},{"id":"r01-7233","when":"24 ต.ค. 12:41","cards":{"Alpaca":[0.1177,0.3323],"Capybara":[0.3323,0.549],"Reindeer":[0.549,0.765],"Panda":[0.765,0.8401],"Koala":[0.8401,0.9171],"Tiger":[0.9171,1]}},{"id":"r01-E250","when":"24 ต.ค. 14:16","cards":{"Alpaca":[0.1177,0.3324],"Capybara":[0.3324,0.5484],"Reindeer":[0.5484,0.7642],"Koala":[0.7642,0.8415],"Panda":[0.8415,0.9169],"Tiger":[0.9169,1]}},{"id":"r01-2A6A","when":"24 ต.ค. 14:21","cards":{"Alpaca":[0.1176,0.3323],"Capybara":[0.3323,0.5493],"Reindeer":[0.5493,0.7644],"Koala":[0.7644,0.8416],"Panda":[0.8416,0.9169],"Tiger":[0.9169,1]}},{"id":"r01-86AF","when":"24 ต.ค. 14:24","cards":{"Alpaca":[0.1177,0.3323],"Capybara":[0.3323,0.5493],"Reindeer":[0.5493,0.7644],"Koala":[0.7644,0.8415],"Panda":[0.8415,0.9168],"Tiger":[0.9168,1]}},{"id":"r01-14A7","when":"24 ต.ค. 14:27","cards":{"Alpaca":[0.1176,0.3323],"Capybara":[0.3323,0.5493],"Reindeer":[0.5493,0.7644],"Koala":[0.7644,0.8412],"Panda":[0.8412,0.9168],"Tiger":[0.9168,1]}},{"id":"r01-B51A","when":"24 ต.ค. 14:28","cards":{"Alpaca":[0.1176,0.1936],"Capybara":[0.1936,0.2694],"Reindeer":[0.2694,0.3451],"Koala":[0.3451,0.4219],"Panda":[0.4219,0.6379],"Tiger":[0.6379,1]}},{"id":"r01-3519","when":"24 ต.ค. 14:30","cards":{"Alpaca":[0.1176,0.1936],"Capybara":[0.1936,0.2697],"Reindeer":[0.2697,0.3451],"Koala":[0.3451,0.4218],"Panda":[0.4218,0.6379],"Tiger":[0.6379,1]}},{"id":"r01-D710","when":"24 ต.ค. 14:32","cards":{"Alpaca":[0.1176,0.1936],"Capybara":[0.1936,0.2694],"Reindeer":[0.2694,0.3451],"Koala":[0.3451,0.4219],"Panda":[0.4219,0.6379],"Tiger":[0.6379,1]}},{"id":"r01-DBA3","when":"24 ต.ค. 14:42","cards":{"Alpaca":[0.1176,0.332],"Capybara":[0.332,0.5491],"Reindeer":[0.5491,0.7644],"Koala":[0.7644,0.8414],"Panda":[0.8414,0.9169],"Tiger":[0.9169,1]}},{"id":"r01-1394","when":"24 ต.ค. 15:02","cards":{"Alpaca":[0.1176,0.3322],"Capybara":[0.3322,0.5488],"Reindeer":[0.5488,0.7644],"Koala":[0.7644,0.8415],"Panda":[0.8415,0.9169],"Tiger":[0.9169,1]}},{"id":"r01-2B33","when":"24 ต.ค. 16:15","cards":{"Alpaca":[0.1174,0.3328],"Capybara":[0.3328,0.5492],"Reindeer":[0.5492,0.7644],"Koala":[0.7644,0.8415],"Panda":[0.8415,0.9172],"Tiger":[0.9172,1]}},{"id":"r02-6975","when":"24 ต.ค. 16:34","cards":{"Alpaca":[0.1174,0.3328],"Capybara":[0.3328,0.5492],"Reindeer":[0.5492,0.7644],"Koala":[0.7644,0.8415],"Panda":[0.8415,0.9172],"Tiger":[0.9172,1]}},{"id":"r02-A2B6","when":"24 ต.ค. 16:37","cards":{"Alpaca":[0.1173,0.3328],"Capybara":[0.3328,0.5492],"Reindeer":[0.5492,0.7644],"Koala":[0.7644,0.8415],"Panda":[0.8415,0.9172],"Tiger":[0.9172,1]}},{"id":"r02-463A","when":"24 ต.ค. 17:02","cards":{"Alpaca":[0.1173,0.3328],"Capybara":[0.3328,0.5492],"Reindeer":[0.5492,0.7644],"Koala":[0.7644,0.8415],"Panda":[0.8415,0.9172],"Tiger":[0.9172,1]}},{"id":"r02-6130","when":"24 ต.ค. 17:21","cards":{"Reindeer":[0.0572,0.2653],"Koala":[0.2653,0.4816],"Panda":[0.4816,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-A6F1","when":"24 ต.ค. 17:21","cards":{"Alpaca":[0.1173,0.3325],"Capybara":[0.3325,0.5482],"Reindeer":[0.5482,0.7643],"Koala":[0.7643,0.9752]}},{"id":"r02-C8EE","when":"24 ต.ค. 17:21","cards":{"Alpaca":[0.1176,0.1934],"Capybara":[0.1934,0.2692],"Reindeer":[0.2692,0.3449],"Koala":[0.3449,0.4224],"Panda":[0.4224,0.4979],"Tiger":[0.4979,1]}},{"id":"r02-4401","when":"24 ต.ค. 17:34","cards":{"Alpaca":[0.1179,0.3328],"Capybara":[0.3328,0.5482],"Reindeer":[0.5482,0.7643],"Koala":[0.7643,0.9752]}},{"id":"r02-604A","when":"24 ต.ค. 17:34","cards":{"Reindeer":[0.0572,0.2653],"Koala":[0.2653,0.4816],"Panda":[0.4816,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-4A69","when":"24 ต.ค. 18:06","cards":{"Reindeer":[0.0572,0.2651],"Panda":[0.2651,0.4808],"Koala":[0.4808,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-9E18","when":"24 ต.ค. 18:06","cards":{"Alpaca":[0.1178,0.3326],"Capybara":[0.3326,0.5484],"Reindeer":[0.5484,0.7646],"Panda":[0.7646,0.9752]}},{"id":"r02-980D","when":"24 ต.ค. 18:12","cards":{"Reindeer":[0.0572,0.2661],"Panda":[0.2661,0.4809],"Koala":[0.4809,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-C42D","when":"24 ต.ค. 18:12","cards":{"Alpaca":[0.1179,0.3326],"Capybara":[0.3326,0.5484],"Reindeer":[0.5484,0.7649],"Panda":[0.7649,0.9752]}},{"id":"r02-05C5","when":"24 ต.ค. 18:20","cards":{"Alpaca":[0.1178,0.3323],"Capybara":[0.3323,0.5483],"Reindeer":[0.5483,0.765],"Panda":[0.765,0.9752]}},{"id":"r02-51D4","when":"24 ต.ค. 18:20","cards":{"Reindeer":[0.0572,0.266],"Panda":[0.266,0.4812],"Koala":[0.4812,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-DE36","when":"24 ต.ค. 18:42","cards":{"Reindeer":[0.0572,0.2659],"Panda":[0.2659,0.4809],"Koala":[0.4809,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-EB75","when":"24 ต.ค. 18:42","cards":{"Alpaca":[0.1178,0.3326],"Capybara":[0.3326,0.5483],"Reindeer":[0.5483,0.7649],"Panda":[0.7649,0.9752]}},{"id":"r02-9FDA","when":"24 ต.ค. 18:49","cards":{"Alpaca":[0.1178,0.3326],"Capybara":[0.3326,0.5483],"Reindeer":[0.5483,0.7649],"Panda":[0.7649,0.9752]}},{"id":"r02-F4E0","when":"24 ต.ค. 18:49","cards":{"Reindeer":[0.0572,0.2659],"Panda":[0.2659,0.4809],"Koala":[0.4809,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-0AC7","when":"24 ต.ค. 18:52","cards":{"Alpaca":[0.1177,0.3326],"Capybara":[0.3326,0.5483],"Reindeer":[0.5483,0.7649],"Panda":[0.7649,0.9752]}},{"id":"r02-693D","when":"24 ต.ค. 18:52","cards":{"Reindeer":[0.0572,0.2659],"Panda":[0.2659,0.4809],"Koala":[0.4809,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-3179","when":"24 ต.ค. 18:58","cards":{"Alpaca":[0.1177,0.3326],"Capybara":[0.3326,0.5483],"Reindeer":[0.5483,0.7645],"Panda":[0.7645,0.9752]}},{"id":"r02-95B4","when":"24 ต.ค. 18:58","cards":{"Reindeer":[0.0572,0.2658],"Panda":[0.2658,0.4809],"Koala":[0.4809,0.6973],"Tiger":[0.6973,1]}},{"id":"r02-6771","when":"24 ต.ค. 19:05","cards":{"Alpaca":[0.1177,0.3328],"Capybara":[0.3328,0.5486],"Reindeer":[0.5486,0.7645],"Panda":[0.7645,0.9752]}},{"id":"r02-C1EF","when":"24 ต.ค. 19:05","cards":{"Reindeer":[0.0959,0.3114],"Panda":[0.3114,0.5272],"Tiger":[0.5272,0.7433],"Koala":[0.7433,1]}},{"id":"r02-88F7","when":"24 ต.ค. 19:22","cards":{"Alpaca":[0.1177,0.3323],"Capybara":[0.3323,0.5483],"Reindeer":[0.5483,0.7647],"Panda":[0.7647,0.9752]}},{"id":"r02-8F02","when":"24 ต.ค. 19:22","cards":{"Reindeer":[0.0993,0.3153],"Panda":[0.3153,0.5308],"Tiger":[0.5308,0.7464],"Koala":[0.7464,1]}},{"id":"r02-1E0F","when":"24 ต.ค. 19:26","cards":{"Reindeer":[0.0862,0.3017],"Panda":[0.3017,0.5178],"Tiger":[0.5178,0.7332],"Koala":[0.7332,1]}},{"id":"r02-8B20","when":"24 ต.ค. 19:26","cards":{"Alpaca":[0.0945,0.3099],"Capybara":[0.3099,0.5263],"Reindeer":[0.5263,0.7418],"Panda":[0.7418,0.9562],"Tiger":[0.9562,1]}},{"id":"r02-7E71","when":"24 ต.ค. 19:40","cards":{"Alpaca":[0.1177,0.3326],"Capybara":[0.3326,0.5493],"Panda":[0.5493,0.7647],"Reindeer":[0.7647,0.9752]}},{"id":"r02-DBE4","when":"24 ต.ค. 19:40","cards":{"Panda":[0.0919,0.3061],"Reindeer":[0.3061,0.5227],"Tiger":[0.5227,0.7385],"Koala":[0.7385,1]}},{"id":"r02-29AC","when":"24 ต.ค. 19:44","cards":{"Panda":[0.0899,0.3041],"Reindeer":[0.3041,0.5205],"Tiger":[0.5205,0.7364],"Koala":[0.7364,1]}},{"id":"r02-A815","when":"24 ต.ค. 19:44","cards":{"Alpaca":[0.1177,0.3326],"Capybara":[0.3326,0.5493],"Panda":[0.5493,0.7647],"Reindeer":[0.7647,0.9752]}},{"id":"r02-B22E","when":"24 ต.ค. 20:14","cards":{"Alpaca":[0.1177,0.3324],"Capybara":[0.3324,0.5485],"Koala":[0.5485,0.7644],"Panda":[0.7644,0.9752]}},{"id":"r02-C446","when":"24 ต.ค. 20:14","cards":{"Koala":[0.0976,0.3131],"Panda":[0.3131,0.5287],"Reindeer":[0.5287,0.7449],"Tiger":[0.7449,1]}},{"id":"r02-5DE9","when":"24 ต.ค. 20:19","cards":{"Alpaca":[0.1175,0.3324],"Capybara":[0.3324,0.5485],"Koala":[0.5485,0.7639],"Panda":[0.7639,0.9752]}},{"id":"r02-E672","when":"24 ต.ค. 20:19","cards":{"Koala":[0.0856,0.2975],"Panda":[0.2975,0.5132],"Reindeer":[0.5132,0.7291],"Tiger":[0.7291,1]}},{"id":"r02-6EC0","when":"24 ต.ค. 20:25","cards":{"Koala":[0.0954,0.3112],"Panda":[0.3112,0.5269],"Reindeer":[0.5269,0.7426],"Tiger":[0.7426,1]}},{"id":"r02-7FC2","when":"24 ต.ค. 20:25","cards":{"Alpaca":[0.0901,0.3057],"Capybara":[0.3057,0.521],"Koala":[0.521,0.7374],"Panda":[0.7374,0.9524],"Reindeer":[0.9524,1]}},{"id":"r02-89B7","when":"24 ต.ค. 20:35","cards":{"Koala":[0.0908,0.3068],"Panda":[0.3068,0.5226],"Reindeer":[0.5226,0.7385],"Tiger":[0.7385,1]}},{"id":"r02-EA1B","when":"24 ต.ค. 20:35","cards":{"Alpaca":[0.0831,0.299],"Capybara":[0.299,0.5142],"Koala":[0.5142,0.7308],"Panda":[0.7308,0.9466],"Reindeer":[0.9466,1]}},{"id":"r03-0DF2","when":"24 ต.ค. 21:09","cards":{"Reindeer":[0.0865,0.3022],"Panda":[0.3022,0.5171],"Koala":[0.5171,0.7338],"Tiger":[0.7338,1]}},{"id":"r03-7224","when":"24 ต.ค. 21:09","cards":{"Capybara":[0.1175,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7648],"Panda":[0.7648,0.9752]}},{"id":"r03-0890","when":"24 ต.ค. 21:25","cards":{"Reindeer":[0.0947,0.3102],"Panda":[0.3102,0.5263],"Koala":[0.5263,0.7418],"Tiger":[0.7418,1]}},{"id":"r03-6416","when":"24 ต.ค. 21:25","cards":{"Capybara":[0.1175,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7647],"Panda":[0.7647,0.9752]}},{"id":"r03-4EC0","when":"24 ต.ค. 21:42","cards":{"Reindeer":[0.0877,0.3035],"Panda":[0.3035,0.5189],"Koala":[0.5189,0.7352],"Tiger":[0.7352,1]}},{"id":"r03-7D8B","when":"24 ต.ค. 21:42","cards":{"Capybara":[0.0991,0.3145],"Alpaca":[0.3145,0.5313],"Reindeer":[0.5313,0.7473],"Panda":[0.7473,0.96],"Koala":[0.96,1]}},{"id":"r03-3188","when":"24 ต.ค. 21:51","cards":{"Reindeer":[0.0959,0.3109],"Panda":[0.3109,0.527],"Koala":[0.527,0.7426],"Tiger":[0.7426,1]}},{"id":"r03-A714","when":"24 ต.ค. 21:51","cards":{"Capybara":[0.1173,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7645],"Panda":[0.7645,0.9752]}},{"id":"r03-A271","when":"24 ต.ค. 22:13","cards":{"Reindeer":[0.1033,0.3189],"Panda":[0.3189,0.5337],"Koala":[0.5337,0.7499],"Tiger":[0.7499,1]}},{"id":"r03-E54E","when":"24 ต.ค. 22:13","cards":{"Capybara":[0.1173,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7645],"Panda":[0.7645,0.9752]}},{"id":"r03-79E2","when":"24 ต.ค. 22:17","cards":{"Capybara":[0.1173,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7644],"Panda":[0.7644,0.9752]}},{"id":"r03-873C","when":"24 ต.ค. 22:17","cards":{"Reindeer":[0.0979,0.3127],"Panda":[0.3127,0.529],"Koala":[0.529,0.7447],"Tiger":[0.7447,1]}},{"id":"r03-92CD","when":"24 ต.ค. 22:25","cards":{"Capybara":[0.1173,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7645],"Panda":[0.7645,0.9752]}},{"id":"r03-F97C","when":"24 ต.ค. 22:25","cards":{"Reindeer":[0.0919,0.3066],"Panda":[0.3066,0.5232],"Koala":[0.5232,0.7385],"Tiger":[0.7385,1]}},{"id":"r03-1654","when":"24 ต.ค. 22:30","cards":{"Capybara":[0.1174,0.3321],"Alpaca":[0.3321,0.5491],"Reindeer":[0.5491,0.7645],"Panda":[0.7645,0.9752]}},{"id":"r03-CE5D","when":"24 ต.ค. 22:30","cards":{"Reindeer":[0.0976,0.3121],"Panda":[0.3121,0.528],"Koala":[0.528,0.7443],"Tiger":[0.7443,1]}}],"limits":[{"date":"24 ต.ค.","n":74,"first":"07:39","last":"22:30","longest_gap":129}],"ai_ready":true}]}</script>
+<script>
+(() => {
+  const DATA = JSON.parse(document.getElementById("data").textContent);
+  const TIERS = {
+    strong: { label: "น่าสงสัยมาก", mean: "ตัวเลขผิดปกติชัดเจน และแคปภาพมีหลักฐานพอ" },
+    likely: { label: "น่าสงสัย", mean: "ผิดปกติ แต่หลักฐานยังไม่แน่น หรือผิดปกติระดับกลาง" },
+    watch: { label: "ควรจับตา", mean: "ผิดปกติเล็กน้อย หรือแคปภาพห่างจนยืนยันไม่ได้" },
+  };
+  const ORDER = ["strong", "likely", "watch"];
+  const RULES = [
+    ["R1", "ยอดสะสม (ก้าวหรือ kcal) ลดลง ซึ่งไม่ควรเกิด"],
+    ["R2", "ก้าวขึ้นเร็วเกินช่วงเวลาที่มี"],
+    ["R4", "kcal ต่อก้าวสะสม ต่ำกว่า 0.5× หรือสูงกว่า 1.5× ของค่ากลางกลุ่ม"],
+    ["R5", "kcal ต่อก้าวที่เพิ่มในวันเดียวกัน ต่ำกว่า 0.5× หรือสูงกว่า 2× ของค่ากลางกลุ่ม"],
+    ["R6", "ก้าวเพิ่มตั้งแต่ 1,000 แต่ kcal ไม่ขยับนานเกิน 15 นาที หรือ kcal เพิ่มตั้งแต่ 20 โดยก้าวแทบไม่เพิ่ม"],
+    ["R7", "ก้าวเฉลี่ยต่อวันนับจากวันเข้าร่วม เกิน 30,000"],
+    ["R8", "อันดับที่แสดงขัดกับจำนวนก้าว"],
+    ["R9", "เวลาเข้าร่วมของคนเดียวกันเปลี่ยน"],
+    ["R10", "เวลาเข้าร่วมตรงกันถึงนาทีกับสมาชิกอื่น (ข้อมูลประกอบ)"],
+    ["R11", "ก้าวบนหัวการ์ดไม่ตรงกับในรายละเอียด"],
+  ];
+  const fmt = (v) => v == null ? "-" : v.toLocaleString("en-US");
+  const el = (tag, attrs = {}, ...kids) => {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === "class") e.className = v; else if (k === "text") e.textContent = v;
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+    }
+    for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(k));
+    return e;
+  };
+  const $ = (id) => document.getElementById(id);
+  const svgIcon = (d) => { const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "path");
+    s.setAttribute("viewBox", "0 0 16 16"); s.setAttribute("width", "16"); s.setAttribute("height", "16");
+    p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); p.setAttribute("stroke-linecap", "round"); p.setAttribute("stroke-linejoin", "round");
+    s.append(p); return s; };
+  const chevron = () => svgIcon("M4 6l4 4 4-4");
+  const colorVar = (i) => `var(--s${(i % 6) + 1})`;
+
+  let team = DATA.teams[0];
+  let who = "all";
+  if (!team) { $("app").replaceChildren(el("p", { class: "empty" }, "ยังไม่มีข้อมูล")); return; }
+
+  /* ---------- lightbox ---------- */
+  const lb = $("lb");
+  let lbList = [], lbIdx = 0, lbAlias = null;
+  const stage = lb.querySelector(".stage"), frame = $("lbframe");
+  /* zoom state: frame is fitted to the stage at scale 1, then transformed (origin top-left) */
+  let z = { s: 1, x: 0, y: 0 }, nat = null;
+  const MAXZ = 5;
+  function fitLb() {
+    if (!nat) return;
+    const W = stage.clientWidth, H = stage.clientHeight, f = Math.min(W / nat[0], H / nat[1]);
+    frame.style.width = Math.round(nat[0] * f) + "px"; frame.style.height = Math.round(nat[1] * f) + "px";
+    setZ(1, 0, 0);
+  }
+  function setZ(sc, x, y) {
+    const W = stage.clientWidth, H = stage.clientHeight, w = frame.offsetWidth, h = frame.offsetHeight, L = frame.offsetLeft, T = frame.offsetTop;
+    sc = Math.min(MAXZ, Math.max(1, sc));
+    const clamp = (v, size, room, off) => size * sc <= room ? (room - size * sc) / 2 - off : Math.min(-off, Math.max(room - off - size * sc, v));
+    z = { s: sc, x: clamp(x, w, W, L), y: clamp(y, h, H, T) };
+    frame.style.transform = `translate(${z.x}px,${z.y}px) scale(${z.s})`;
+    frame.classList.toggle("zoomed", z.s > 1.01);
+  }
+  /* zoom to scale sc keeping the stage point (px, py) fixed */
+  function zoomAt(sc, px, py) {
+    const ux = (px - frame.offsetLeft - z.x) / z.s, uy = (py - frame.offsetTop - z.y) / z.s;
+    sc = Math.min(MAXZ, Math.max(1, sc));
+    setZ(sc, px - frame.offsetLeft - sc * ux, py - frame.offsetTop - sc * uy);
+  }
+  function showLb() {
+    const img = lbList[lbIdx];
+    nat = null; frame.style.transform = ""; frame.style.width = frame.style.height = "0px";
+    const im = el("img", { src: `img/${img.id}.jpg`, alt: `ภาพหน้าจอ ${img.when}`, draggable: "false" });
+    im.addEventListener("load", () => { nat = [im.naturalWidth, im.naturalHeight]; fitLb(); });
+    frame.replaceChildren(im);
+    const c = img.card;
+    if (c) frame.append(el("div", { class: "hl", style: `top:${c[0] * 100}%;height:${(c[1] - c[0]) * 100}%` }));
+    $("lbcap").textContent = `${img.label ? img.label + " " : ""}${img.when}${c && lbAlias ? ", การ์ด " + lbAlias : ""}`;
+    $("lbpos").textContent = `${lbIdx + 1}/${lbList.length}`;
+    $("lbprev").disabled = lbIdx === 0; $("lbnext").disabled = lbIdx === lbList.length - 1;
+    $("lbprev").hidden = $("lbnext").hidden = $("lbpos").hidden = lbList.length < 2;
+    $("lbhint").textContent = lbList.length < 2 ? "ถ่างนิ้วหรือดับเบิลคลิกเพื่อซูม" : "ปัดซ้ายขวาหรือกด ← → เพื่อดูภาพถัดไป ถ่างนิ้วหรือดับเบิลคลิกเพื่อซูม";
+  }
+  function openLb(list, idx, alias) { lbList = list; lbIdx = idx; lbAlias = alias; lb.hidden = false; showLb(); $("lbclose").focus(); }
+  const stepLb = (d) => { const i = lbIdx + d; if (i >= 0 && i < lbList.length) { lbIdx = i; showLb(); } };
+  const closeLb = () => { lb.hidden = true; };
+  $("lbclose").addEventListener("click", closeLb);
+  $("lbprev").addEventListener("click", () => stepLb(-1));
+  $("lbnext").addEventListener("click", () => stepLb(1));
+  document.addEventListener("keydown", (e) => {
+    if (lb.hidden) return;
+    if (e.key === "Escape") closeLb();
+    if (e.key === "ArrowLeft") stepLb(-1);
+    if (e.key === "ArrowRight") stepLb(1);
+  });
+  window.addEventListener("resize", () => { if (!lb.hidden) fitLb(); });
+
+  /* gestures: pinch / wheel / double-tap to zoom, drag to pan when zoomed, swipe to change image at 1x, tap backdrop to close */
+  const ptrs = new Map();
+  let g = null, lastTap = 0;
+  const local = (e) => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  stage.addEventListener("pointerdown", (e) => {
+    stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, local(e));
+    if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()];
+      g = { pinch: true, d0: Math.hypot(a[0] - b[0], a[1] - b[1]), s0: z.s, moved: true,
+        ux: ((a[0] + b[0]) / 2 - frame.offsetLeft - z.x) / z.s, uy: ((a[1] + b[1]) / 2 - frame.offsetTop - z.y) / z.s };
+    } else if (ptrs.size === 1) {
+      const p = local(e); g = { pinch: false, p0: p, x0: z.x, y0: z.y, moved: false, onImg: frame.contains(e.target) || e.target === frame };
+    }
+  });
+  stage.addEventListener("pointermove", (e) => {
+    if (!ptrs.has(e.pointerId) || !g) return;
+    ptrs.set(e.pointerId, local(e));
+    if (g.pinch && ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      const sc = Math.min(MAXZ, Math.max(1, g.s0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / g.d0));
+      setZ(sc, mx - frame.offsetLeft - sc * g.ux, my - frame.offsetTop - sc * g.uy);
+    } else if (!g.pinch) {
+      const p = local(e), dx = p[0] - g.p0[0], dy = p[1] - g.p0[1];
+      if (Math.abs(dx) + Math.abs(dy) > 6) g.moved = true;
+      if (z.s > 1.01) setZ(z.s, g.x0 + dx, g.y0 + dy);
+    }
+  });
+  const endPtr = (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    const p = local(e); ptrs.delete(e.pointerId);
+    if (!g) return;
+    if (g.pinch) { if (ptrs.size === 0) g = null; else { const q = [...ptrs.values()][0]; g = { pinch: false, p0: q, x0: z.x, y0: z.y, moved: true }; } return; }
+    const dx = p[0] - g.p0[0], dy = p[1] - g.p0[1];
+    if (g.moved && z.s <= 1.01 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) stepLb(dx < 0 ? 1 : -1);
+    else if (!g.moved && e.type === "pointerup") {
+      const now = Date.now();
+      if (now - lastTap < 300) { lastTap = 0; z.s > 1.01 ? setZ(1, 0, 0) : zoomAt(2.5, p[0], p[1]); }
+      else { lastTap = now; if (!g.onImg && z.s <= 1.01) setTimeout(() => { if (lastTap === now && !lb.hidden) closeLb(); }, 300); }
+    }
+    g = null;
+  };
+  stage.addEventListener("pointerup", endPtr);
+  stage.addEventListener("pointercancel", endPtr);
+  stage.addEventListener("wheel", (e) => { e.preventDefault(); const p = local(e); zoomAt(z.s * Math.exp(-e.deltaY * 0.002), p[0], p[1]); }, { passive: false });
+  lb.addEventListener("click", (e) => { if (e.target === lb) closeLb(); });
+
+  /* ---------- verdict ---------- */
+  function renderVerdict() {
+    $("scope").textContent = `${team.label} ตรวจจากภาพแคป ${team.n_images} ภาพ ช่วง ${team.period}`;
+    $("h1").textContent = `พบ ${team.n_points} จุดต้องสงสัย`;
+    $("sub").textContent = `มีจุดต้องสงสัยกับสมาชิก ${team.n_people} จาก ${team.n_members} คน`;
+    const tb = $("teams"); tb.hidden = DATA.teams.length < 2;
+    tb.replaceChildren(...DATA.teams.map((t) => el("button", { type: "button", "aria-pressed": String(t === team),
+      onclick: () => { team = t; who = "all"; render(); } }, t.label)));
+    $("tiers").replaceChildren(...ORDER.map((k) => el("button", { class: `tier t-${k}`, type: "button",
+      onclick: () => { const g = $("g-" + k); if (g) g.scrollIntoView({ behavior: "smooth", block: "start" }); } },
+      el("span", { class: "n" }, String(team.counts[k])), el("span", { class: "t" }, TIERS[k].label), el("span", { class: "d" }, TIERS[k].mean))));
+  }
+
+  /* ---------- points ---------- */
+  function figure(img, alias, list, idx) {
+    const src = img.crop || `img/${img.id}.jpg`;
+    return el("button", { class: "fig", type: "button", onclick: () => openLb(list, idx, alias), "aria-label": `ดูภาพเต็ม ${img.label} ${img.when}` },
+      el("span", { class: "frame" }, el("img", { src, alt: `การ์ด ${alias} ${img.label} ${img.when}`, loading: "lazy" })),
+      el("span", { class: "cap" }, el("b", {}, img.label + " "), img.when));
+  }
+  function pointRow(p) {
+    const sum = el("summary", {},
+      el("span", { class: "tm" }, team.days > 1 ? el("span", {}, p.date) : null, p.time),
+      el("span", {}, el("span", { class: "who" }, p.alias), el("span", { class: "rule" }, p.rule_th), el("br"), el("span", { class: "what" }, p.head)),
+      el("span", { class: "chev", "aria-hidden": "true" }, chevron()));
+    const body = el("div", { class: "pt-body" },
+      p.key.length ? el("ul", {}, p.key.map((l) => el("li", {}, l))) : null,
+      p.more.length ? el("details", { class: "more" }, el("summary", {}, "รายละเอียดเพิ่ม"), el("ul", {}, p.more.map((l) => el("li", {}, l)))) : null,
+      p.images.length ? el("div", { class: "evidence" }, p.images.map((im, i) => figure(im, p.alias, p.images, i))) : null,
+      p.innocent ? el("p", { class: "note-block" }, el("span", { class: "k" }, "เหตุผลที่เป็นไปได้แบบปกติ"), p.innocent) : null,
+      p.ai ? el("p", { class: "note-block" }, el("span", { class: "k" }, "ความเห็นผู้วิเคราะห์"), p.ai) : null);
+    return el("details", { class: "pt", id: "p-" + p.id }, sum, body);
+  }
+  function renderFilters() {
+    const names = [...new Set(team.points.map((p) => p.alias))].sort();
+    const btn = (v, label) => el("button", { type: "button", "aria-pressed": String(who === v), onclick: () => { who = v; renderFilters(); renderPoints(); } }, label);
+    $("filters").replaceChildren(btn("all", "ทุกคน"), ...names.map((n) => btn(n, n)));
+  }
+  function renderPoints() {
+    const box = $("groups"); box.replaceChildren();
+    const list = team.points.filter((p) => who === "all" || p.alias === who);
+    if (!list.length) { box.append(el("p", { class: "empty" }, "ไม่มีจุดต้องสงสัย")); return; }
+    for (const k of ORDER) {
+      const ps = list.filter((p) => p.tier === k); if (!ps.length) continue;
+      box.append(el("div", { class: `group t-${k}`, id: "g-" + k },
+        el("div", { class: "group-head" }, el("h3", {}, TIERS[k].label), el("span", { class: "c" }, `${ps.length} จุด`)),
+        ps.map(pointRow)));
+    }
+  }
+
+  /* ---------- supporting sections ---------- */
+  function renderPeople() {
+    const head = el("tr", {}, el("th", {}, "สมาชิก"), el("th", {}, "จุดต้องสงสัย"), el("th", { class: "r" }, "ก้าวล่าสุด"), el("th", { class: "r" }, "ก้าวส่วนเกิน (เพดาน 200 ก้าว/นาที)"));
+    const rows = team.members.map((m, i) => {
+      const any = ORDER.some((k) => m.counts[k]);
+      return el("tr", {},
+        el("td", {}, el("span", { class: "legend", style: "padding:0" }, el("span", {}, el("i", { class: "sw", style: `background:${colorVar(i)}` }), m.alias))),
+        el("td", {}, any ? el("span", { class: "cnt" }, ORDER.filter((k) => m.counts[k]).map((k) => el("span", { class: k }, `${TIERS[k].label} ${m.counts[k]}`))) : el("span", { class: "muted" }, "ไม่พบ")),
+        el("td", { class: "r" }, fmt(m.steps)),
+        el("td", { class: "r" }, m.excess.strict || m.excess.soft ? `${fmt(m.excess.strict)} (ถ้าใช้เพดาน 150: ${fmt(m.excess.soft)})` : "0"));
+    });
+    $("people").replaceChildren(el("thead", {}, head), el("tbody", {}, rows));
+  }
+  function renderContext() {
+    const list = (title, why, items) => items.length ? el("div", { style: "display:grid;gap:6px" }, el("h3", { style: "font-size:16px" }, title), el("p", { class: "muted small" }, why),
+      el("ul", {}, items.map((x) => el("li", {}, el("b", { style: "font-weight:600" }, x.alias + " "), x.head)))) : null;
+    $("context").replaceChildren(
+      list("ภาพรวม kcal ทั้งวัน", "ไม่นับเป็นจุด เพราะเป็นพฤติกรรม kcal เดียวกับจุดที่นับไปแล้ว แต่ดูทั้งวัน", team.support) || "",
+      list("ข้อมูลประกอบ", "ไม่นับเป็นจุด เพราะเป็นข้อเท็จจริงคงที่ หรือ app คำนวณใหม่เล็กน้อย", team.info) || "");
+    if (!team.support.length && !team.info.length) $("context").replaceChildren(el("p", { class: "muted" }, "ไม่มี"));
+  }
+  function renderLimits() {
+    const rows = team.limits.map((d) => el("tr", {}, el("td", {}, d.date), el("td", { class: "r" }, String(d.n)), el("td", {}, `${d.first} ถึง ${d.last}`), el("td", { class: "r" }, `${d.longest_gap} นาที`)));
+    $("limits").replaceChildren(
+      el("p", {}, "แคปภาพตามเวลาที่ผู้ตรวจสะดวก ยิ่งแคปห่าง ยิ่งตัดสินยาก จุดที่แคปห่างเกิน 20 นาทีจึงให้ความมั่นใจสูงสุดแค่ระดับกลาง"),
+      el("div", { class: "tablewrap" }, el("table", { style: "min-width:360px" }, el("thead", {}, el("tr", {}, el("th", {}, "วัน"), el("th", { class: "r" }, "ภาพ"), el("th", {}, "ช่วงเวลา"), el("th", { class: "r" }, "แคปห่างที่สุด"))), el("tbody", {}, rows))),
+      el("ul", {},
+        el("li", {}, "ก้าวแสดงเป็นหลักพัน (เช่น 44.5k) จึงคลาดเคลื่อนได้ ±50 ก้าวต่อค่า ทุกการคำนวณเผื่อไว้แล้ว"),
+        el("li", {}, "อ่านตัวเลขด้วย OCR ในเครื่อง ทดสอบกับภาพที่คนตรวจแล้ว 74 ภาพ อ่านผิด 0 จาก 1,442 ช่อง ค่าที่อ่านไม่ชัดให้คนตรวจซ้ำ"),
+        el("li", {}, "เห็นค่าได้เฉพาะที่แสดงบนจอ การ์ดที่หุบอยู่จะไม่เห็น kcal")));
+  }
+  function renderMethod() {
+    $("method").replaceChildren(
+      el("div", { style: "display:grid;gap:6px" }, el("h3", { style: "font-size:16px" }, "ระดับความน่าสงสัย"),
+        el("ul", {},
+          el("li", {}, "ดูจาก 2 อย่าง: ผิดปกติแค่ไหน และข้อมูลพอให้เชื่อแค่ไหน"),
+          el("li", {}, "น่าสงสัยมาก: ผิดปกติสูง และข้อมูลมั่นใจสูงหรือกลาง"),
+          el("li", {}, "น่าสงสัย: ผิดปกติสูงแต่ข้อมูลไม่แน่น หรือผิดปกติกลางที่ข้อมูลมั่นใจพอ"),
+          el("li", {}, "ควรจับตา: ผิดปกติกลางที่ข้อมูลไม่แน่น หรือผิดปกติต่ำ"),
+          el("li", {}, "ถ้าก้าวขึ้นเร็วและ kcal ต่อก้าวต่ำพร้อมกัน ยกขึ้น 1 ขั้น"),
+          el("li", {}, "ไม่ใช้เปอร์เซ็นต์ เพราะภาพที่แคปไว้ไม่พอจะบอกความน่าจะเป็นที่แม่นยำ"))),
+      el("div", { style: "display:grid;gap:6px" }, el("h3", { style: "font-size:16px" }, "ดูอย่างไรว่าก้าวเพิ่มเร็วเกินไป"),
+        el("ul", {},
+          el("li", {}, "app sync ราวทุก 10 นาที เผื่อเป็น 15 นาที ค่าที่เห็นจึงอาจเก่าได้ไม่เกิน 15 นาที"),
+          el("li", {}, "ช่วงเวลาที่ก้าวสะสมได้ = เวลาที่เห็นค่าใหม่ ลบเวลาที่เร็วที่สุดที่ก้าวอาจเริ่มเพิ่ม (15 นาทีก่อนภาพสุดท้ายที่ยังเห็นค่าเดิม แต่ไม่ก่อนภาพแรกที่เห็นค่าเดิม)"),
+          el("li", {}, "best case คือคิดเข้าข้างผู้เล่นที่สุด: (ก้าวที่เพิ่ม - 100) หารด้วย (ช่วงเวลา + 1 นาที)"),
+          el("li", {}, "ไม่เกิน 110 ก้าว/นาที ปกติ, 110 ถึง 150 ระดับต่ำ (เดินเร็วหรือวิ่งเหยาะตลอดช่วง), 150 ถึง 200 ระดับกลาง (ต้องวิ่งตลอดช่วง), เกิน 200 ระดับสูง (แทบเป็นไปไม่ได้)"),
+          el("li", {}, "ก้าวส่วนเกิน = ก้าวที่เกินกว่าจะทำได้ทัน ถ้าเดินวิ่งเร็วสุด 200 (หรือ 150) ก้าว/นาทีตลอดช่วงเวลานั้น"))),
+      el("div", { style: "display:grid;gap:6px" }, el("h3", { style: "font-size:16px" }, "เกณฑ์ทั้งหมด"),
+        el("ul", {}, RULES.map(([k, v]) => el("li", {}, el("b", { style: "font-weight:600" }, k + " "), v)))));
+  }
+  function renderGallery() {
+    $("gal-title").textContent = `ภาพทั้งหมด (${team.images.length})`;
+    $("gallery").replaceChildren(...team.images.map((im, i, all) => el("button", { class: "fig", type: "button", onclick: () => openLb(all.map((x) => ({ ...x, label: "" })), i, null) },
+      el("span", { class: "frame" }, el("img", { src: `img/${im.id}.jpg`, alt: `ภาพหน้าจอ ${im.when}`, loading: "lazy" })), el("span", { class: "cap" }, im.when))));
+  }
+
+  /* ---------- chart ---------- */
+  function renderChart() {
+    const box = $("chart");
+    const W = Math.max(300, box.clientWidth), H = Math.round(Math.min(340, Math.max(220, W * 0.42)));
+    const m = { l: 44, r: 10, t: 10, b: 24 };
+    const tOf = (d, t) => (Date.parse(d + "T00:00:00Z") / 60000) + (+t.slice(0, 2)) * 60 + (+t.slice(3, 5));
+    const series = team.members.map((mm, i) => ({ alias: mm.alias, i, pts: mm.series.filter((p) => p[2] != null).map((p) => ({ x: tOf(p[0], p[1]), y: p[2] })) }));
+    const all = series.flatMap((s) => s.pts);
+    if (!all.length) { box.replaceChildren(el("p", { class: "empty" }, "ยังไม่มีข้อมูล")); return; }
+    const x0 = Math.min(...all.map((p) => p.x)), x1 = Math.max(...all.map((p) => p.x));
+    const step = 10000, lo = Math.floor(Math.min(...all.map((p) => p.y)) / step) * step, hi = Math.ceil(Math.max(...all.map((p) => p.y)) / step) * step;
+    const X = (v) => m.l + (x1 === x0 ? 0 : (v - x0) / (x1 - x0)) * (W - m.l - m.r);
+    const Y = (v) => H - m.b - (v - lo) / (hi - lo || 1) * (H - m.t - m.b);
+    const NS = "http://www.w3.org/2000/svg";
+    const s = (tag, a) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "กราฟก้าวสะสมของสมาชิกตามเวลา" });
+    for (let v = lo; v <= hi; v += step) {
+      svg.append(s("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--line)", "stroke-width": 1 }));
+      const tx = s("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }); tx.textContent = `${v / 1000}k`; svg.append(tx);
+    }
+    const hours = []; for (let h = Math.ceil(x0 / 120) * 120; h <= x1; h += 120) hours.push(h);
+    const every = Math.ceil(hours.length / Math.max(2, Math.floor(W / 70)));
+    hours.forEach((h, k) => { if (k % every) return; const tx = s("text", { x: X(h), y: H - 6, "text-anchor": "middle" });
+      const mm = ((h % 1440) + 1440) % 1440; tx.textContent = `${String(Math.floor(mm / 60)).padStart(2, "0")}:00`; svg.append(tx); });
+    series.forEach((se) => { if (!se.pts.length) return;
+      svg.append(s("polyline", { points: se.pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(" "), fill: "none", stroke: colorVar(se.i), "stroke-width": 2, "stroke-linejoin": "round" })); });
+    const tip = el("div", { class: "tip", hidden: true });
+    team.points.forEach((p) => {
+      const after = p.images.find((i) => i.label === "หลัง"); const mem = team.members.find((mm) => mm.alias === p.alias);
+      if (!after || !mem) return;
+      const q = mem.series.find((r) => r[4] === after.id); if (!q || q[2] == null) return;
+      const c = s("circle", { cx: X(tOf(q[0], q[1])), cy: Y(q[2]), r: 6, fill: "var(--bg)", stroke: `var(--${p.tier})`, "stroke-width": 2.5, tabindex: 0, style: "cursor:pointer" });
+      const show = () => { tip.hidden = false; tip.textContent = `${p.alias} ${p.time} ${TIERS[p.tier].label}`;
+        const r = box.getBoundingClientRect(), cr = c.getBoundingClientRect();
+        tip.style.left = Math.min(r.width - 80, Math.max(80, cr.left - r.left + cr.width / 2)) + "px"; tip.style.top = (cr.top - r.top) + "px"; };
+      c.addEventListener("mouseenter", show); c.addEventListener("focus", show);
+      c.addEventListener("mouseleave", () => tip.hidden = true); c.addEventListener("blur", () => tip.hidden = true);
+      const go = () => { const d = $("p-" + p.id); if (d) { who = "all"; renderFilters(); renderPoints(); const d2 = $("p-" + p.id); d2.open = true; d2.scrollIntoView({ behavior: "smooth", block: "center" }); } };
+      c.addEventListener("click", go); c.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+      svg.append(c);
+    });
+    const legend = el("div", { class: "legend" }, ...series.map((se) => el("span", {}, el("i", { class: "sw", style: `background:${colorVar(se.i)}` }), se.alias)),
+      el("span", { class: "muted" }, "วงกลม = จุดต้องสงสัย (สีตามระดับ)"));
+    box.replaceChildren(svg, legend, tip);
+  }
+
+  function render() { renderVerdict(); renderFilters(); renderPoints(); renderPeople(); renderContext(); renderLimits(); renderMethod(); renderGallery(); renderChart(); }
+  render();
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderChart, 150); });
+  if (!location.hash.startsWith("#p-")) { const first = document.querySelector(".pt"); if (first) first.open = true; }
+  if (location.hash.startsWith("#p-")) { const d = $(location.hash.slice(1)); if (d) { d.open = true; d.scrollIntoView(); } }
+})();
+</script>
