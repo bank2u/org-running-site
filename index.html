@@ -157,7 +157,9 @@ tr:last-child td { border-bottom: 0; }
 .lightbox .stage { position: relative; overflow: hidden; display: grid; place-items: center; min-height: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
 .lightbox .stage > * { grid-area: 1 / 1; }
 .lightbox .frame { position: relative; transform-origin: 0 0; will-change: transform; cursor: zoom-in; }
-.lightbox .peek { position: relative; visibility: hidden; pointer-events: none; will-change: transform; }
+.lightbox .peek { position: relative; visibility: hidden; pointer-events: none; will-change: transform, opacity; backface-visibility: hidden; }
+.lightbox .frame { backface-visibility: hidden; }
+.lightbox .peek, .lightbox .frame { box-shadow: 0 18px 40px -18px rgba(0,0,0,.6); border-radius: var(--r); }
 .lightbox .peek img { border-radius: var(--r); }
 .lightbox .edge { align-self: end; justify-self: center; margin-bottom: 14px; padding: 6px 16px; border-radius: 999px; background: rgba(20,24,31,.82); color: #fff; font-size: 14px; line-height: 1.6; opacity: 0; pointer-events: none; white-space: nowrap; }
 .lightbox .frame.zoomed { cursor: grab; }
@@ -282,10 +284,12 @@ tr:last-child td { border-bottom: 0; }
   /* zoom state: frame is fitted to the stage at scale 1, then transformed (origin top-left) */
   let z = { s: 1, x: 0, y: 0 }, nat = null;
   const MAXZ = 5;
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const fitTo = (n) => { const f = Math.min(stage.clientWidth / n[0], stage.clientHeight / n[1]); return [Math.round(n[0] * f), Math.round(n[1] * f)]; };
   function fitLb() {
     if (!nat) return;
-    const W = stage.clientWidth, H = stage.clientHeight, f = Math.min(W / nat[0], H / nat[1]);
-    frame.style.width = Math.round(nat[0] * f) + "px"; frame.style.height = Math.round(nat[1] * f) + "px";
+    const [w, h] = fitTo(nat);
+    frame.style.width = w + "px"; frame.style.height = h + "px";
     setZ(1, 0, 0);
   }
   function setZ(sc, x, y) {
@@ -293,7 +297,7 @@ tr:last-child td { border-bottom: 0; }
     sc = Math.min(MAXZ, Math.max(1, sc));
     const clamp = (v, size, room, off) => size * sc <= room ? (room - size * sc) / 2 - off : Math.min(-off, Math.max(room - off - size * sc, v));
     z = { s: sc, x: clamp(x, w, W, L), y: clamp(y, h, H, T) };
-    frame.style.transform = `translate(${z.x}px,${z.y}px) scale(${z.s})`;
+    frame.style.transform = `translate3d(${z.x}px,${z.y}px,0) scale(${z.s})`;
     frame.classList.toggle("zoomed", z.s > 1.01);
   }
   /* zoom to scale sc keeping the stage point (px, py) fixed */
@@ -302,72 +306,120 @@ tr:last-child td { border-bottom: 0; }
     sc = Math.min(MAXZ, Math.max(1, sc));
     setZ(sc, px - frame.offsetLeft - sc * ux, py - frame.offsetTop - sc * uy);
   }
-  const EASE = "cubic-bezier(.22,1,.36,1)";
-  const rest = () => `translate(${z.x}px,${z.y}px) scale(${z.s})`;
-  /* Neighbour images sit beside the current one (16px gap) and move with it, so a swipe shows the next image
-     arriving. Only the two neighbours are loaded; sizes are cached once known. Where there is no neighbour an
-     edge label fades in instead. */
+
+  /* ---- swipe carousel ----
+     The two neighbours sit 20px beside the current image and travel with the finger. Depth: the leaving image
+     shrinks to 92% and dims, the arriving one grows from 92% to 100%. Only transform/opacity change (GPU
+     compositing), all reads happen once at drag start, and writes are batched into one rAF per frame.
+     Release uses the finger's velocity: a quick flick commits even over a short distance, and the glide
+     duration follows the remaining distance. Where there is no neighbour the image resists (rubber band) and
+     an edge label fades in. */
   const peeks = { "-1": $("pk-1"), "1": $("pk1") }, edges = { "-1": $("edge-1"), "1": $("edge1") }, natCache = {};
-  const GAPPX = 16;
-  const fitTo = (n) => { const f = Math.min(stage.clientWidth / n[0], stage.clientHeight / n[1]); return [Math.round(n[0] * f), Math.round(n[1] * f)]; };
+  const GAPPX = 20, DEPTH = 0.08, EASE_OUT = "cubic-bezier(.2,.9,.25,1)", EASE_BACK = "cubic-bezier(.3,1.3,.5,1)";
+  let geo = null, raf = 0, pendingOff = 0;
   function layoutPeeks() {
     for (const d of [-1, 1]) {
       const pk = peeks[d], im = lbList[lbIdx + d], n = im && natCache[im.id];
       pk.dataset.ok = "";
+      pk.style.visibility = "hidden";
       if (!n) continue;
       const [w, h] = fitTo(n);
       pk.style.width = w + "px"; pk.style.height = h + "px";
-      const img = pk.firstChild || pk.appendChild(Object.assign(new Image(), { alt: "", draggable: false })); if (pk.dataset.id !== im.id) { img.src = `img/${im.id}.jpg`; pk.dataset.id = im.id; }
+      const img = pk.firstChild || pk.appendChild(Object.assign(new Image(), { alt: "", draggable: false }));
+      if (pk.dataset.id !== im.id) { img.src = `img/${im.id}.jpg`; pk.dataset.id = im.id; }
       pk.dataset.ok = "1";
-      pk.style.transition = "none"; pk.style.visibility = "hidden";
-      pk.style.transform = `translateX(${d * peekOff(pk)}px)`;
     }
   }
-  const peekOff = (pk) => (frame.offsetWidth + pk.offsetWidth) / 2 + GAPPX;
   function preload(i) {
     const im = lbList[i]; if (!im || natCache[im.id]) return;
     const x = new Image();
-    x.onload = () => { natCache[im.id] = [x.naturalWidth, x.naturalHeight]; if (!lb.hidden) layoutPeeks(); };
+    x.onload = () => { natCache[im.id] = [x.naturalWidth, x.naturalHeight]; if (!lb.hidden && !geo) layoutPeeks(); };
     x.src = `img/${im.id}.jpg`;
   }
-  /* move frame + neighbours by off px (finger offset); at rest off = 0 */
-  function dragTo(off, ease) {
-    const tr = ease ? `transform ${ease}` : "none";
-    frame.style.transition = tr; frame.style.transform = `translate(${z.x + off}px,${z.y}px) scale(1)`;
+  /* read layout once per gesture */
+  function measure() {
+    const fw = frame.offsetWidth, fh = frame.offsetHeight;
+    geo = { fw, fh, dist: {} };
+    for (const d of [-1, 1]) if (peeks[d].dataset.ok) geo.dist[d] = (fw + peeks[d].offsetWidth) / 2 + GAPPX;
+  }
+  /* paint the carousel at finger offset `off` (px); `t` = CSS transition or "" for none */
+  function paint(off, t = "") {
+    const tr = t ? `transform ${t}, opacity ${t}` : "none";
+    const dir = off < 0 ? 1 : -1, span = geo.dist[dir] || geo.fw;
+    const p = Math.min(Math.abs(off) / span, 1);            // 0 at rest, 1 when the neighbour is centred
+    const s = 1 - DEPTH * p;                                 // current image scales about its centre
+    frame.style.transition = tr;
+    frame.style.transform = `translate3d(${off + geo.fw * (1 - s) / 2}px,${geo.fh * (1 - s) / 2}px,0) scale(${s})`;
+    frame.style.opacity = String(1 - 0.35 * p);
     for (const d of [-1, 1]) {
-      const pk = peeks[d], e = edges[d];
-      if (pk.dataset.ok) { pk.style.transition = tr; pk.style.visibility = "visible"; pk.style.transform = `translateX(${d * peekOff(pk) + off}px)`; }
-      else { const pull = d * off < 0 ? Math.min(Math.abs(off) / 90, 1) : 0; e.style.transition = ease ? "opacity .3s" : "none"; e.style.opacity = String(pull); }
+      const pk = peeks[d];
+      if (geo.dist[d]) {
+        const q = d === dir ? p : 0, ps = 1 - DEPTH * (1 - q);
+        pk.style.transition = tr; pk.style.visibility = "visible";
+        pk.style.transform = `translate3d(${d * geo.dist[d] + off}px,0,0) scale(${ps})`;
+        pk.style.opacity = String(0.55 + 0.45 * q);
+      } else {
+        const e = edges[d], pull = d === dir ? Math.min(Math.abs(off) / 60, 1) : 0;
+        e.style.transition = t ? "opacity .25s" : "none"; e.style.opacity = String(pull);
+      }
     }
   }
-  function settle() {  // spring back to rest
-    dragTo(0, `.4s ${EASE}`);
-    setTimeout(() => { if (!g || !g.moved) layoutPeeks(); }, 420);
+  const schedule = (off) => { pendingOff = off; if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(pendingOff); }); };
+  function clearCarousel() {
+    frame.style.transition = "none"; frame.style.opacity = "1";
+    for (const d of [-1, 1]) { const pk = peeks[d]; pk.style.transition = "none"; pk.style.visibility = "hidden"; pk.style.opacity = ""; pk.style.transform = ""; edges[d].style.opacity = "0"; }
+    geo = null;
   }
-  function showLb() {
-    const img = lbList[lbIdx];
-    nat = null; frame.style.transition = "none"; frame.style.transform = ""; frame.style.width = frame.style.height = "0px";
+  function settle(v = 0) {  // spring back; a slight overshoot easing reads as elastic
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    paint(0, REDUCED ? "0s" : `${Math.round(Math.min(420, 300 + Math.abs(v) * 60))}ms ${EASE_BACK}`);
+    setTimeout(() => { clearCarousel(); setZ(1, 0, 0); }, REDUCED ? 0 : 440);
+  }
+  let busy = false;
+  /* commit to neighbour d, gliding from the current offset with a duration that follows the remaining distance */
+  function commit(d, off = 0, v = 0) {
+    if (busy) return;
+    if (!geo) measure();
+    const dist = geo.dist[d]; if (!dist) { settle(); return; }
+    busy = true;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    const remain = dist - Math.abs(off), speed = Math.max(Math.abs(v), 1.4);   // px/ms
+    const ms = REDUCED ? 0 : Math.round(Math.min(380, Math.max(200, remain / speed)));
+    paint(-d * dist, `${ms}ms ${EASE_OUT}`);
+    setTimeout(() => { lbIdx += d; showLb(true); busy = false; }, ms + 16);
+  }
+  const stepLb = (d) => { if (z.s > 1.01 || busy) return; measure(); paint(0); commit(d); };
+
+  /* swap = true: the neighbour is centred on screen; keep it visible until the new image is decoded, then
+     reveal the real frame in place, so there is no blank frame between images */
+  function showLb(swap) {
+    const img = lbList[lbIdx], cached = natCache[img.id];
     const im = el("img", { src: `img/${img.id}.jpg`, alt: `ภาพหน้าจอ ${img.when}`, draggable: "false" });
-    im.addEventListener("load", () => { nat = [im.naturalWidth, im.naturalHeight]; natCache[img.id] = nat; fitLb(); layoutPeeks(); preload(lbIdx - 1); preload(lbIdx + 1); });
-    frame.replaceChildren(im);
+    const ready = () => {
+      nat = [im.naturalWidth, im.naturalHeight]; natCache[img.id] = nat;
+      frame.replaceChildren(im);
+      const c = img.card;
+      if (c) frame.append(el("div", { class: "hl", style: `top:${c[0] * 100}%;height:${(c[1] - c[0]) * 100}%` }));
+      clearCarousel(); fitLb(); layoutPeeks();
+      preload(lbIdx - 1); preload(lbIdx + 1);
+    };
+    if (!swap) { frame.style.width = frame.style.height = "0px"; frame.replaceChildren(); }
+    if (cached) { nat = cached; }
+    let fired = false;
+    const once = () => { if (!fired) { fired = true; ready(); } };
+    /* decode before swapping so the new frame paints in one go; fall back if decode stalls */
+    im.addEventListener("load", () => { if (im.decode) im.decode().then(once, once); setTimeout(once, 250); });
+    im.addEventListener("error", once);
     const c = img.card;
-    if (c) frame.append(el("div", { class: "hl", style: `top:${c[0] * 100}%;height:${(c[1] - c[0]) * 100}%` }));
     $("lbcap").textContent = `${img.label ? img.label + " " : ""}${img.when}${c && lbAlias ? ", การ์ด " + lbAlias : ""}`;
     $("lbpos").textContent = `${lbIdx + 1}/${lbList.length}`;
     $("lbprev").disabled = lbIdx === 0; $("lbnext").disabled = lbIdx === lbList.length - 1;
     $("lbprev").hidden = $("lbnext").hidden = $("lbpos").hidden = lbList.length < 2;
-    for (const d of [-1, 1]) { edges[d].style.opacity = "0"; peeks[d].style.visibility = "hidden"; }
   }
-  function openLb(list, idx, alias) { lbList = list; lbIdx = idx; lbAlias = alias; lb.hidden = false; peeks[-1].dataset.id = peeks[1].dataset.id = ""; showLb(); $("lbclose").focus(); }
-  let busy = false;
-  /* commit a step: current image and neighbour slide together, then the neighbour becomes the current image */
-  const stepLb = (d) => {
-    const i = lbIdx + d; if (busy || i < 0 || i >= lbList.length || z.s > 1.01) return;
-    const pk = peeks[d]; if (!pk.dataset.ok) return;
-    busy = true;
-    dragTo(-d * peekOff(pk), `.34s ${EASE}`);
-    setTimeout(() => { lbIdx = i; showLb(); busy = false; }, 340);
-  };
+  function openLb(list, idx, alias) {
+    lbList = list; lbIdx = idx; lbAlias = alias; lb.hidden = false;
+    peeks[-1].dataset.id = peeks[1].dataset.id = ""; clearCarousel(); showLb(); $("lbclose").focus();
+  }
   const closeLb = () => { lb.hidden = true; };
   $("lbclose").addEventListener("click", closeLb);
   $("lbprev").addEventListener("click", () => stepLb(-1));
@@ -378,51 +430,66 @@ tr:last-child td { border-bottom: 0; }
     if (e.key === "ArrowLeft") stepLb(-1);
     if (e.key === "ArrowRight") stepLb(1);
   });
-  window.addEventListener("resize", () => { if (!lb.hidden) { fitLb(); layoutPeeks(); } });
+  window.addEventListener("resize", () => { if (!lb.hidden && !busy) { clearCarousel(); fitLb(); layoutPeeks(); } });
 
-  /* gestures: pinch / wheel / double-tap to zoom, drag to pan when zoomed, swipe to change image at 1x, tap backdrop to close */
+  /* gestures: pinch / wheel / double-tap to zoom, drag to pan when zoomed, swipe between images at 1x,
+     tap the backdrop to close */
   const ptrs = new Map();
   let g = null, lastTap = 0;
   const local = (e) => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   stage.addEventListener("pointerdown", (e) => {
+    if (busy) return;
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, local(e));
     if (ptrs.size === 2) {
+      if (geo) { clearCarousel(); setZ(1, 0, 0); }
       const [a, b] = [...ptrs.values()];
       g = { pinch: true, d0: Math.hypot(a[0] - b[0], a[1] - b[1]), s0: z.s, moved: true,
         ux: ((a[0] + b[0]) / 2 - frame.offsetLeft - z.x) / z.s, uy: ((a[1] + b[1]) / 2 - frame.offsetTop - z.y) / z.s };
     } else if (ptrs.size === 1) {
-      const p = local(e); g = { pinch: false, p0: p, x0: z.x, y0: z.y, moved: false, onImg: frame.contains(e.target) || e.target === frame };
+      const p = local(e);
+      g = { pinch: false, p0: p, x0: z.x, y0: z.y, moved: false, swipe: false, hist: [[performance.now(), p[0]]],
+        onImg: frame.contains(e.target) || e.target === frame };
     }
   });
   stage.addEventListener("pointermove", (e) => {
     if (!ptrs.has(e.pointerId) || !g) return;
-    ptrs.set(e.pointerId, local(e));
+    const p = local(e); ptrs.set(e.pointerId, p);
     if (g.pinch && ptrs.size === 2) {
       const [a, b] = [...ptrs.values()], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
       const sc = Math.min(MAXZ, Math.max(1, g.s0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / g.d0));
       setZ(sc, mx - frame.offsetLeft - sc * g.ux, my - frame.offsetTop - sc * g.uy);
-    } else if (!g.pinch) {
-      const p = local(e), dx = p[0] - g.p0[0], dy = p[1] - g.p0[1];
-      if (Math.abs(dx) + Math.abs(dy) > 6) g.moved = true;
-      if (z.s > 1.01) setZ(z.s, g.x0 + dx, g.y0 + dy);
-      else if (g.moved && !busy && Math.abs(dx) > Math.abs(dy)) {
-        const d = dx < 0 ? 1 : -1, edge = !peeks[d].dataset.ok;
-        dragTo(edge ? dx * 0.3 : dx);  // rubber-band when there is no neighbour
-      }
+      return;
     }
+    if (g.pinch) return;
+    const dx = p[0] - g.p0[0], dy = p[1] - g.p0[1];
+    if (!g.moved && Math.abs(dx) + Math.abs(dy) > 6) {
+      g.moved = true;
+      g.swipe = z.s <= 1.01 && Math.abs(dx) > Math.abs(dy);   // decide the axis once
+      if (g.swipe) measure();
+    }
+    if (z.s > 1.01) { setZ(z.s, g.x0 + dx, g.y0 + dy); return; }
+    if (!g.swipe) return;
+    g.hist.push([performance.now(), p[0]]); if (g.hist.length > 6) g.hist.shift();
+    const d = dx < 0 ? 1 : -1;
+    const off = geo.dist[d] ? dx : dx / (1 + Math.abs(dx) / 120) * 0.5;   // rubber band at the ends
+    g.off = off; schedule(off);
   });
   const endPtr = (e) => {
     if (!ptrs.has(e.pointerId)) return;
     const p = local(e); ptrs.delete(e.pointerId);
     if (!g) return;
     if (g.pinch) { if (ptrs.size === 0) g = null; else { const q = [...ptrs.values()][0]; g = { pinch: false, p0: q, x0: z.x, y0: z.y, moved: true }; } return; }
-    const dx = p[0] - g.p0[0], dy = p[1] - g.p0[1];
-    if (g.moved && z.s <= 1.01 && Math.abs(dx) > Math.abs(dy)) {
-      const d = dx < 0 ? 1 : -1, ok = !!peeks[d].dataset.ok;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && ok) { g = null; stepLb(d); return; }
-      g = null; settle(); return;
+    if (g.swipe) {
+      const dx = p[0] - g.p0[0], d = dx < 0 ? 1 : -1, now = performance.now();
+      const old = g.hist.find(([t]) => now - t < 100) || g.hist[0];
+      const v = (p[0] - old[1]) / Math.max(now - old[0], 1);   // px/ms, signed
+      const flick = Math.abs(v) > 0.45 && Math.sign(v) === Math.sign(dx) && Math.abs(dx) > 16;
+      const far = geo && geo.dist[d] && Math.abs(dx) > geo.dist[d] * 0.33;
+      const off = g.off || 0; g = null;
+      if (geo && geo.dist[d] && (flick || far)) commit(d, off, v); else settle(v);
+      return;
     }
-    else if (!g.moved && e.type === "pointerup") {
+    if (!g.moved && e.type === "pointerup") {
       const now = Date.now();
       if (now - lastTap < 300) { lastTap = 0; z.s > 1.01 ? setZ(1, 0, 0) : zoomAt(2.5, p[0], p[1]); }
       else { lastTap = now; if (!g.onImg && z.s <= 1.01) setTimeout(() => { if (lastTap === now && !lb.hidden) closeLb(); }, 300); }
@@ -431,7 +498,7 @@ tr:last-child td { border-bottom: 0; }
   };
   stage.addEventListener("pointerup", endPtr);
   stage.addEventListener("pointercancel", endPtr);
-  stage.addEventListener("wheel", (e) => { e.preventDefault(); const p = local(e); zoomAt(z.s * Math.exp(-e.deltaY * 0.002), p[0], p[1]); }, { passive: false });
+  stage.addEventListener("wheel", (e) => { e.preventDefault(); if (geo) return; const p = local(e); zoomAt(z.s * Math.exp(-e.deltaY * 0.002), p[0], p[1]); }, { passive: false });
   lb.addEventListener("click", (e) => { if (e.target === lb) closeLb(); });
 
   /* ---------- verdict ---------- */
