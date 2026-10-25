@@ -153,6 +153,12 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 .mx .c.t-watch { background: var(--watch-bg); color: var(--watch); }
 .mx .c .dot { margin-right: 3px; }
 .mx .c[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.mx-scroll.few { max-width: 520px; }
+.mx-scroll.few table { width: 100%; }
+.mx-scroll.few tbody th { width: 96px; }
+.mx-scroll.few .c { white-space: nowrap; }
+.mx-scroll.few .c { width: 100%; font-size: 14px; }
+.mx-scroll.few thead th b { display: inline; font-size: 14px; }
 .mx .cap { font-size: 14px; color: var(--muted); }
 
 /* collapsed supporting rows */
@@ -467,6 +473,7 @@ tr:last-child td { border-bottom: 0; }
     if (busy) return;
     if (!geo) measure();
     const dist = geo.dist[d]; if (!dist) { settle(); return; }
+    if (FINE.matches) { clearCarousel(); lbIdx += d; showLb(true); return; }
     busy = true;
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
     const remain = dist - Math.abs(off), speed = Math.max(Math.abs(v), 1.4);   // px/ms
@@ -474,7 +481,13 @@ tr:last-child td { border-bottom: 0; }
     paint(-d * dist, `${ms}ms ${EASE_OUT}`);
     setTimeout(() => { lbIdx += d; showLb(true); busy = false; }, ms + 16);
   }
-  const stepLb = (d) => { if (z.s > 1.01 || busy) return; measure(); paint(0); commit(d); };
+  /* mouse + keyboard devices: swap images instantly, the glide is for touch */
+  const FINE = matchMedia("(hover: hover) and (pointer: fine)");
+  const stepLb = (d) => {
+    if (z.s > 1.01 || busy) return;
+    if (FINE.matches) { const n = lbIdx + d; if (n < 0 || n >= lbList.length) return; lbIdx = n; showLb(true); return; }
+    measure(); paint(0); commit(d);
+  };
 
   /* swap = true: the neighbour is centred on screen; keep it visible until the new image is decoded, then
      reveal the real frame in place, so there is no blank frame between images */
@@ -703,17 +716,18 @@ tr:last-child td { border-bottom: 0; }
     if (!days.length) { box.replaceChildren(); return; }
     const cell = {};
     for (const p of team.points) { const k = p.alias + "|" + p.iso, c = cell[k] || (cell[k] = { n: 0, tier: p.tier }); c.n++; if (TIER_RANK[p.tier] > TIER_RANK[c.tier]) c.tier = p.tier; }
+    const few = days.length <= 7;
     const head = el("tr", {}, el("th", {}), ...days.map((d, i) => { const [dd, mm] = d.th.split(" ");
-      return el("th", { class: i % 7 === 0 ? "wk" : null }, el("b", {}, dd), mm); }));
+      return el("th", { class: i % 7 === 0 ? "wk" : null }, el("b", {}, few ? d.th : dd), few ? null : mm); }));
     const rows = team.members.map((m) => el("tr", {}, el("th", { scope: "row" }, m.alias), ...days.map((d, i) => {
       const c = cell[m.alias + "|" + d.iso], on = F.who === m.alias && F.day === d.iso;
       if (!c) return el("td", { class: i % 7 === 0 ? "wk" : null }, el("span", { class: "c e", "aria-label": `${m.alias} ${d.th} ไม่พบ` }));
       return el("td", { class: i % 7 === 0 ? "wk" : null }, el("button", { type: "button", class: `c t-${c.tier}`, "aria-pressed": String(on),
         "aria-label": `${m.alias} ${d.th} ${TIERS[c.tier].label} ${c.n} ประเด็น`,
         onclick: () => { F = on ? { ...ALL } : { ...ALL, who: m.alias, day: d.iso }; showWatch = true; applyFilters(); if (!on) toList(); } },
-        el("span", { class: `dot t-${c.tier}` }), String(c.n)));
+        el("span", { class: `dot t-${c.tier}` }), few ? `${c.n} ประเด็น` : String(c.n)));
     })));
-    const sc = el("div", { class: "mx-scroll" }, el("table", {}, el("thead", {}, head), el("tbody", {}, rows)));
+    const sc = el("div", { class: "mx-scroll" + (few ? " few" : "") }, el("table", {}, el("thead", {}, head), el("tbody", {}, rows)));
     box.replaceChildren(sc, el("p", { class: "cap" }, "จำนวนประเด็นของแต่ละคนในแต่ละวัน สีตามประเด็นที่หนักที่สุดของวันนั้น กดช่องเพื่อดูเฉพาะประเด็นเหล่านั้น"));
     sc.scrollLeft = sc.scrollWidth;
   }
