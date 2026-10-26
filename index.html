@@ -291,9 +291,16 @@ tr:last-child td { border-bottom: 0; }
   .tier:first-child { border-top: 0; }
   .tier, .tier + .tier { padding: 14px 18px; border-left: 0; border-top: 1px solid var(--line); grid-template-columns: 56px 1fr; column-gap: 12px; }
   .tier .n { grid-row: span 2; font-size: 36px; }
-  .pt > summary { grid-template-columns: 52px minmax(0, 1fr) 16px; gap: 4px 12px; padding: 14px 8px; }
+  /* phone: date | text | chevron. The metric drops under the text instead of taking a third column, so the text keeps ~75% of the width */
+  .pt > summary, .pt > summary.has-m { grid-template-columns: 48px minmax(0, 1fr) 16px; gap: 0 12px; padding: 14px 8px; align-items: start; }
+  .pt > summary > .tm { grid-row: 1 / span 2; padding-top: 2px; }
+  .pt > summary > .chev { grid-column: 3; grid-row: 1 / span 2; align-self: start; padding-top: 4px; }
+  .pt > summary > .m { grid-column: 2; text-align: left; margin-top: 8px; display: flex; align-items: baseline; gap: 6px; }
+  .pt > summary > .m b { display: inline; font-size: 17px; }
+  .pt .who { display: block; }
+  .pt .rule, .pt .new { margin: 4px 6px 0 0; }
+  .pt .what { display: block; margin-top: 4px; }
   .pt-body { padding-left: 12px; }
-  .pt > summary.has-m { grid-template-columns: 52px minmax(0, 1fr) auto 16px; }
   .grp-body { margin-left: 12px; }
   .mx .c { width: 40px; }
   .fbar .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
