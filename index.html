@@ -582,7 +582,7 @@ tr:last-child td { border-bottom: 0; }
   let g = null, lastTap = 0;
   const local = (e) => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   stage.addEventListener("pointerdown", (e) => {
-    if (busy) return;
+    if (busy || e.target.closest(".side")) return;   // the arrow buttons own their pointer: capturing it here swallowed the click and counted as a backdrop tap (closed the viewer)
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, local(e));
     if (ptrs.size === 2) {
       if (geo) { clearCarousel(); setZ(1, 0, 0); }
@@ -724,6 +724,16 @@ tr:last-child td { border-bottom: 0; }
   /* sticky bar gets a divider once it is stuck */
   new IntersectionObserver(([en]) => $("fbar").classList.toggle("stuck", !en.isIntersecting)).observe($("fsentinel"));
 
+  /* rebuilding the list used to close the cards the reader had open (the page above the button shrank and the view jumped);
+     keep them open, and put the anchor back where it was on screen */
+  function keepPlace(anchor, rebuild) {
+    const top = anchor.getBoundingClientRect().top;
+    const opened = [...document.querySelectorAll("#groups details[open][id]")].map((d) => d.id);   // cards the reader opened stay open
+    rebuild();
+    opened.forEach((id) => { const d = $(id); if (d) d.open = true; });
+    const now = $(anchor.id), y = now.getBoundingClientRect().top;
+    window.scrollTo({ top: window.scrollY + y - top, behavior: "instant" });
+  }
   /* repeated events of one finding (same member + rule + day + grade) collapse into one card */
   function renderPoints() {
     const box = $("groups"); box.replaceChildren();
@@ -739,7 +749,7 @@ tr:last-child td { border-bottom: 0; }
       const fold = k === "watch" && !showWatch && F.tier !== "watch" && n > 0;
       box.append(el("div", { class: `group t-${k}`, id: "g-" + k },
         el("div", { class: "group-head" }, el("h3", {}, TIERS[k].label), el("span", { class: "c" }, `${n} ประเด็น`)),
-        fold ? el("button", { type: "button", class: "more-watch", onclick: () => { showWatch = true; renderPoints(); } }, `ดูอีก ${n} ประเด็นที่ควรจับตา`)
+        fold ? el("button", { type: "button", class: "more-watch", onclick: () => keepPlace($("g-watch"), () => { showWatch = true; renderPoints(); }) }, `ดูอีก ${n} ประเด็นที่ควรจับตา`)
           : cs.map((ps) => ps.length === 1 ? pointRow(ps[0]) : groupRow(ps))));
     }
   }
