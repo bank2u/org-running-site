@@ -520,7 +520,7 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
 
   let team = DATA.teams[0];
   const ALL = { tier: "all", who: "all", day: "all", rule: "all", latest: false, work: false };
-  let F = { ...ALL }, showWatch = false, showWatchNew = false;
+  let F = { ...ALL }, showWatch = true, showWatchNew = true;   // Low (watch) group is expanded by default (user, 2026-10-26)
   let VIEW = "today", who = null;   // current view, and the member shown in รายคน
   const filtering = () => Object.keys(ALL).some((k) => F[k] !== ALL[k]);
   if (!team) { $("app").replaceChildren(el("p", { class: "empty" }, "ยังไม่มีข้อมูล")); return; }
@@ -801,7 +801,7 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
       NEWMODE === "day" && PREV ? " · ไม่มีอะไรใหม่ตั้งแต่ครั้งก่อน" : "");
     const tb = $("teams"); tb.hidden = DATA.teams.length < 2;
     tb.replaceChildren(...DATA.teams.map((t) => el("button", { type: "button", "aria-pressed": String(t === team),
-      onclick: () => { team = t; F = { ...ALL }; showWatch = false; showWatchNew = false; who = null; render(); route(); } }, t.label)));
+      onclick: () => { team = t; F = { ...ALL }; showWatch = true; showWatchNew = true; who = null; render(); route(); } }, t.label)));
   }
   /* grade definitions live in วิธีตรวจ; tapping one opens the full list filtered to that grade */
   function renderTiers() {
