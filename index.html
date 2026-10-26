@@ -304,51 +304,44 @@ tr:last-child td { border-bottom: 0; }
    (วันนี้) wider, ringed and numbered, the days still to come one faded bar. Strips and the axis share --cols so
    the stacked rows read as one heatmap. Fixed alphabetical order, never ranked. */
 .mrows { display: grid; --cw: 22px; --fw: 36px; --wg: 7px; --ch: 26px; }
-.mx-axis, .mrow { display: grid; grid-template-columns: 112px minmax(0, 1fr) 228px 16px; column-gap: 16px; padding-inline: 8px; align-items: center; }
+.mx-axis, .mrow { display: grid; grid-template-columns: 112px minmax(0, 1fr) 240px 16px; column-gap: 16px; padding-inline: 8px; align-items: center; }
 .strip, .axis-strip { display: grid; grid-template-columns: var(--cols); column-gap: 2px; justify-content: start; }
-.mx-axis { padding-bottom: 6px; align-items: end; }
+.mx-axis { padding-bottom: 8px; align-items: end; }
 .mx-axis .axis-strip { grid-column: 2; align-items: end; }
 .axis-strip > span { min-width: 0; font-size: 12px; line-height: 18px; color: var(--muted); white-space: nowrap; }
 .axis-strip .wk { overflow: visible; }
 .axis-strip .now { justify-self: center; padding: 0 7px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 11.5px; font-weight: 600; }
 .axis-strip .rest { padding-left: 10px; overflow: hidden; text-overflow: ellipsis; }
 .axis-strip .near3 { visibility: hidden; }
-.mrow { position: relative; padding-block: 9px; border-top: 1px solid var(--line); transition: background-color .2s; }
-.mrow:last-child { border-bottom: 1px solid var(--line); }
+/* no row rules: rhythm comes from spacing; hover tints the row */
+.mrow { position: relative; padding-block: 8px; border-radius: 8px; transition: background-color .2s; }
 .mrow:hover { background: var(--tint); }
 .mrow .nm { grid-column: 1; font-weight: 600; font-size: 16px; line-height: 1.4; color: var(--ink); text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mrow .nm::after { content: ""; position: absolute; inset: 0; }   /* the whole row opens รายคน; day cells sit above it */
 .mrow .nm:focus-visible { outline: none; }
 .mrow:has(.nm:focus-visible) { outline: 2px solid var(--ink); outline-offset: -2px; }
 .mrow .strip { grid-column: 2; }
-.mrow .sum { grid-column: 3; display: grid; gap: 0; align-content: center; min-height: 40px; min-width: 0; font-size: 14px; line-height: 1.45; }
-.mrow .s1 { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.mrow .s1 .lvl { line-height: 20px; font-size: 12px; }
-.mrow .s1 .nw { color: var(--gold); font-weight: 600; }
-.mrow .s1.quiet { color: var(--muted); }
-.mrow .tp { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mrow .go { grid-column: 4; color: var(--muted); display: grid; place-items: center; }
+.mrow .tp { grid-column: 3; min-width: 0; font-size: 14px; line-height: 1.5; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow .tp.quiet { color: var(--muted); }
+.mrow .go { grid-column: 4; color: #b3b7bf; display: grid; place-items: center; transition: color .2s; }
+.mrow:hover .go { color: var(--ink); }
 .mrow .go svg { transform: rotate(-90deg); }
 /* cells: saturated fill = the worst grade that day; pale = captured, nothing found; hatched = no capture that day */
-.strip .c { position: relative; z-index: 1; height: var(--ch); border-radius: 4px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff; text-decoration: none; }
+.strip .c { position: relative; z-index: 1; height: var(--ch); border-radius: 3px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff; text-decoration: none; }
 .strip a.c { transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s; }
 .strip a.c:hover { transform: translateY(-1px); box-shadow: 0 6px 12px -6px rgba(40,32,16,.45); }
 .strip a.c:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .c.t-strong { background: var(--strong-dot); }
 .c.t-likely { background: var(--likely-dot); color: #2b2000; }
 .c.t-watch { background: #c4c7cd; color: #2f343c; }
-.c.none { background: #ece7db; }
-.c.none::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: #c9c1ad; }
-.c.off { background: none; box-shadow: inset 0 0 0 1px #ddd6c7; background-image: repeating-linear-gradient(135deg, transparent 0 4px, #efe9dc 4px 5px); }
-.strip .c.now { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink); }
-.strip .c.now.off { box-shadow: inset 0 0 0 1px #ddd6c7, 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink); }
-.mrow:hover .strip .c.now { box-shadow: 0 0 0 2px var(--tint), 0 0 0 3.5px var(--ink); }
-.strip .rest { height: var(--ch); border-radius: 4px; margin-left: 8px; background: linear-gradient(90deg, #f1ede3, rgba(241,237,227,.3)); }
-.mx-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; padding-inline: 8px; font-size: 13px; color: var(--muted); }
+.c.none { background: #ebe6da; }
+.c.off { background: none; box-shadow: inset 0 0 0 1px #e2dccf; }
+.strip .c.now { outline: 1.5px solid var(--ink); outline-offset: 2px; }
+/* days still to come: a hairline, not a block */
+.strip .rest { align-self: center; height: 2px; margin-left: 10px; border-radius: 1px; background: var(--line); }
+.mx-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 14px; padding: 12px 8px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
 .mx-key span { display: inline-flex; align-items: center; gap: 6px; }
 .mx-key .c { width: 14px; height: 14px; border-radius: 3px; display: inline-grid; place-items: center; }
-.mx-key .c.none::after { width: 3px; height: 3px; }
-.mx-key .c.now { width: 12px; height: 12px; background: none; box-shadow: 0 0 0 1.5px var(--ink); }
 .mx-key .hint { flex-basis: 100%; }
 
 /* รายคน */
@@ -392,14 +385,13 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
   .pat-body { padding-left: 8px; }
   /* phone: alias + today's grade on one line, the strip full width under it; topics live in the list below */
   .mrows { --cw: 18px; --fw: 30px; --wg: 5px; --ch: 22px; }
-  .mx-axis, .mrow { grid-template-columns: minmax(0, 1fr) auto 16px; column-gap: 10px; }
+  .mx-axis, .mrow { grid-template-columns: minmax(0, 1fr) 16px; column-gap: 10px; }
   .mx-axis .axis-strip { grid-column: 1 / -1; }
   .axis-strip .near5 { visibility: hidden; }
-  .mrow { row-gap: 7px; padding-block: 10px; }
+  .mrow { row-gap: 6px; padding: 8px 6px; }
   .mrow .nm { font-size: 16px; }
-  .mrow .sum { grid-column: 2; grid-row: 1; min-height: 0; }
   .mrow .tp { display: none; }
-  .mrow .go { grid-column: 3; grid-row: 1; }
+  .mrow .go { grid-column: 2; grid-row: 1; }
   .mrow .strip { grid-column: 1 / -1; grid-row: 2; }
   .mx-key { padding-inline: 0; }
   .facts { grid-template-columns: 1fr 1fr; gap: 12px 16px; }
@@ -1071,10 +1063,9 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
           onclick: (e) => { e.preventDefault(); F = { ...ALL, who: m.alias, day: d }; showWatch = true; go("all"); applyFilters(); toList(); } },
           now ? String(nOf(dp)) : null);   // only the focus day carries its count; the others say it on hover
       });
-      const sum = fresh.length
-        ? el("div", { class: "sum" }, el("span", { class: "s1" }, lvl(worstOf(fresh)), el("span", { class: "nw" }, `${word} ${nOf(fresh)}`)),
-          el("span", { class: "tp", title: tl }, tl))
-        : el("div", { class: "sum" }, el("span", { class: "s1 quiet" }, mine.length ? (word === "ใหม่" ? "ไม่มีประเด็นใหม่" : "ไม่มีในวันล่าสุด") : "ไม่พบประเด็นต้องสงสัย"));
+      /* grade and count already live in the focus cell; the row adds only what the points are about */
+      const sum = fresh.length ? el("span", { class: "tp", title: tl }, word === "ใหม่" ? tl : `${lastDay().th} · ${tl}`)
+        : el("span", { class: "tp quiet" }, mine.length ? (word === "ใหม่" ? "ไม่มีประเด็นใหม่" : "ไม่มีในวันล่าสุด") : "ไม่พบประเด็นต้องสงสัย");
       return el("div", { class: "mrow" },
         el("a", { class: "nm", href: "#who=" + encodeURIComponent(m.alias), "aria-label": `ดูรายละเอียด ${m.alias}` }, m.alias),
         el("div", { class: "strip" }, cells, S.rest ? el("span", { class: "rest", "aria-hidden": "true" }) : null),
@@ -1084,8 +1075,8 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
     /* one-line key; what each grade means is on hover here and written out in วิธีตรวจ */
     const key = (cls, t, tip) => el("span", { title: tip || null }, el("i", { class: "c " + cls }), t);
     $("strip-legend").replaceChildren(...ORDER.map((k) => key("t-" + k, TIERS[k].label, TIERS[k].mean)),
-      key("none", "ตรวจแล้ว ไม่พบ"), key("off", "ไม่มีภาพ"), key("now", focusTh || "วันล่าสุด"),
-      el("span", { class: "hint" }, "สีคือระดับที่หนักที่สุดของวันนั้น กดช่องสีเพื่อดูประเด็นของวันนั้น"));
+      key("none", "ตรวจแล้ว ไม่พบ"), key("off", "ไม่มีภาพ"),
+      el("span", { class: "hint" }, "สีคือระดับที่หนักที่สุดของวันนั้น ตัวเลขคือจำนวนประเด็นของวันนี้ กดช่องสีเพื่อดูประเด็น"));
     const fresh = team.points.filter(isNew);
     $("s-new").textContent = NEWMODE === "since" ? `ใหม่ตั้งแต่ครั้งก่อนที่เปิดดู (${nOf(fresh)})`
       : !S.noData && S.isToday ? `ประเด็นของวันนี้ ${lastDay().th} (${nOf(fresh)})` : `ประเด็นของวันล่าสุด ${lastDay()?.th || ""} (${nOf(fresh)})`;
