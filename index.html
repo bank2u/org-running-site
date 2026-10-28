@@ -562,30 +562,9 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
   const filtering = () => Object.keys(ALL).some((k) => F[k] !== ALL[k]);
   if (!team) { $("app").replaceChildren(el("p", { class: "empty" }, "ยังไม่มีข้อมูล")); return; }
 
-  /* ---------- "new": since this viewer's last visit (data time), else the latest day ----------
-     The page remembers the data stamp it last showed this browser. A reload in the same tab keeps the same baseline;
-     storage can be blocked (private mode), so everything falls back to "the latest day". */
-  const seenAt = {};
-  function baseline(t) {
-    if (t.id in seenAt) return seenAt[t.id];
-    let prev = null; const k = "seen:" + t.id;
-    try {
-      const ss = sessionStorage.getItem(k);
-      prev = ss !== null ? ss : localStorage.getItem(k);
-      if (ss === null) sessionStorage.setItem(k, prev || "");
-      localStorage.setItem(k, t.stamp);
-    } catch (e) { prev = null; }
-    return (seenAt[t.id] = prev || null);
-  }
+  /* ---------- "new" = the points of the latest day (user, 2026-10-28: วันนี้ shows the day's list, not what is new since the last visit) ---------- */
   const lastDay = () => team.day_list.length ? team.day_list[team.day_list.length - 1] : null;
-  const newSince = (p, prev) => p.first > prev || (p.changed && p.changed > prev);
-  /* mode "since": something arrived after the last visit; mode "day": first visit, storage off, or nothing new */
-  let NEWMODE = "day", PREV = null;
-  function setNewMode() {
-    PREV = baseline(team);
-    NEWMODE = PREV && team.points.some((p) => newSince(p, PREV)) ? "since" : "day";
-  }
-  const isNew = (p) => NEWMODE === "since" ? newSince(p, PREV) : p.iso === lastDay()?.iso;
+  const isNew = (p) => p.iso === lastDay()?.iso;
 
   /* ---------- the challenge calendar (data/teams.json "challenge"): วันนี้ = the viewer's date in Thailand ----------
      ?today=YYYY-MM-DD previews another date (e.g. a new day before any screenshot arrives). */
@@ -850,12 +829,11 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
     $("h1").textContent = `พบ ${team.n_points} ประเด็นต้องสงสัย`;
     const fresh = team.points.filter(isNew), n = nOf(fresh), k = new Set(fresh.map((p) => p.alias)).size;
     const S = span();
-    const what = NEWMODE === "since" ? "ใหม่ตั้งแต่ครั้งก่อนที่เปิดดู" : !S.noData && S.isToday ? `วันนี้ (${lastDay().th})` : `วันล่าสุด (${lastDay()?.th || "-"})`;
+    const what = !S.noData && S.isToday ? `วันนี้ (${lastDay().th})` : `วันล่าสุด (${lastDay()?.th || "-"})`;
     /* a new day with no screenshot yet is said plainly; yesterday is never called วันนี้ */
     const gap = S.ended ? ` · จบการแข่งขันแล้ว (${dayLabel(CH.end)})` : S.noData && S.isToday ? ` · วันนี้ (${dayLabel(S.focus)}) ยังไม่มีภาพ` : "";
     $("status").replaceChildren(`ข้อมูลล่าสุด ${team.stamp_th}${gap} · ${what} `,
-      n ? el("span", { class: "nw" }, `${n} ประเด็น ใน ${k} คน`) : "ไม่มีประเด็น",
-      NEWMODE === "day" && PREV ? " · ไม่มีอะไรใหม่ตั้งแต่ครั้งก่อน" : "");
+      n ? el("span", { class: "nw" }, `${n} ประเด็น ใน ${k} คน`) : "ไม่มีประเด็น");
     const tb = $("teams"); tb.hidden = DATA.teams.length < 2;
     tb.replaceChildren(...DATA.teams.map((t) => el("button", { type: "button", "aria-pressed": String(t === team),
       onclick: () => { team = t; F = { ...ALL }; showWatch = true; showWatchNew = true; who = null; render(); route(); } }, t.label)));
@@ -924,7 +902,7 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
       team.day_list.length > 1 ? sel("day", "ทุกวัน", team.day_list.filter((d) => team.points.some((p) => p.iso === d.iso)).map((d) => [d.iso, d.th])) : null,
       sel("rule", "ทุกประเภท", [...new Set(team.points.flatMap((p) => p.tags))].sort().map((r) => [r, r])),
       anyNew ? el("button", { type: "button", class: "tog", "aria-pressed": String(F.latest),
-        onclick: () => { F.latest = !F.latest; applyFilters(); } }, NEWMODE === "since" ? "เฉพาะที่ใหม่ตั้งแต่ครั้งก่อน" : `เฉพาะวันล่าสุด (${lastDay()?.th})`) : null,
+        onclick: () => { F.latest = !F.latest; applyFilters(); } }, `เฉพาะวันล่าสุด (${lastDay()?.th})`) : null,
       team.points.some((p) => p.work) ? el("button", { type: "button", class: "tog", "aria-pressed": String(F.work),
         onclick: () => { F.work = !F.work; applyFilters(); } }, "เฉพาะที่ก้าวเพิ่มในเวลางาน") : null);
     const n = nOf(team.points.filter(match)), active = Object.keys(ALL).filter((k) => F[k] !== ALL[k]).length;
@@ -1042,8 +1020,8 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
         return el("span", { class: "wk" + (gap < 3 ? " near3" : gap < 5 && S.past.length > 14 ? " near5" : "") }, dayLabel(d));
       }),
       S.rest ? el("span", { class: "rest" }, S.rest > 2 ? `อีก ${S.rest} วัน ถึง ${dayLabel(CH.end)}` : "") : null));
-    /* rows show what is new; on a new day with no screenshot yet, the latest day that has data */
-    const word = NEWMODE === "day" && S.noData && lastDay() ? "วันล่าสุด" : "ใหม่";
+    /* rows show the focus day's points; on a new day with no screenshot yet, the latest day that has data */
+    const word = S.noData && lastDay() || !S.isToday ? "วันล่าสุด" : "วันนี้";
     const rows = team.members.map((m) => {
       const mine = team.points.filter((p) => p.alias === m.alias), fresh = mine.filter(isNew);
       const tl = topics(fresh).map(([t, n]) => `${t} ${n}`).join(" · ");
@@ -1057,8 +1035,8 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
           now ? String(nOf(dp)) : null);   // only the focus day carries its count; the others say it on hover
       });
       /* grade and count already live in the focus cell; the row adds only what the points are about */
-      const sum = fresh.length ? el("span", { class: "tp", title: tl }, word === "ใหม่" ? tl : `${lastDay().th} · ${tl}`)
-        : el("span", { class: "tp quiet" }, mine.length ? (word === "ใหม่" ? "ไม่มีประเด็นใหม่" : "ไม่มีในวันล่าสุด") : "ไม่พบประเด็นต้องสงสัย");
+      const sum = fresh.length ? el("span", { class: "tp", title: tl }, word === "วันนี้" ? tl : `${lastDay().th} · ${tl}`)
+        : el("span", { class: "tp quiet" }, mine.length ? (word === "วันนี้" ? "ไม่มีประเด็นวันนี้" : "ไม่มีในวันล่าสุด") : "ไม่พบประเด็นต้องสงสัย");
       return el("div", { class: "mrow" },
         el("a", { class: "nm", href: "#who=" + encodeURIComponent(m.alias), "aria-label": `ดูรายละเอียด ${m.alias}` }, m.alias),
         el("div", { class: "strip" }, cells, S.rest ? el("span", { class: "rest", "aria-hidden": "true" }) : null),
@@ -1071,19 +1049,15 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
       key("none", "ตรวจแล้ว ไม่พบ"), key("off", "ไม่มีภาพ"),
       el("span", { class: "hint" }, "สีคือระดับที่หนักที่สุดของวันนั้น ตัวเลขคือจำนวนประเด็นของวันนี้ กดช่องสีเพื่อดูประเด็น"));
     const fresh = team.points.filter(isNew);
-    $("s-new").textContent = NEWMODE === "since" ? `ใหม่ตั้งแต่ครั้งก่อนที่เปิดดู (${nOf(fresh)})`
-      : !S.noData && S.isToday ? `ประเด็นของวันนี้ ${lastDay().th} (${nOf(fresh)})` : `ประเด็นของวันล่าสุด ${lastDay()?.th || ""} (${nOf(fresh)})`;
-    $("new-note").textContent = NEWMODE === "since"
-      ? `นับจากข้อมูลที่เห็นครั้งก่อน (${thStamp(PREV)}) รวมประเด็นที่เปลี่ยนระดับ กดที่แถวเพื่อดูภาพหลักฐาน`
-      : S.noData && S.isToday ? `วันนี้ (${dayLabel(S.focus)}) ยังไม่มีภาพ จึงแสดงวันล่าสุดที่มีข้อมูล กดที่แถวเพื่อดูภาพหลักฐาน`
+    $("s-new").textContent = !S.noData && S.isToday ? `ประเด็นของวันนี้ ${lastDay().th} (${nOf(fresh)})` : `ประเด็นของวันล่าสุด ${lastDay()?.th || ""} (${nOf(fresh)})`;
+    $("new-note").textContent = S.noData && S.isToday ? `วันนี้ (${dayLabel(S.focus)}) ยังไม่มีภาพ จึงแสดงวันล่าสุดที่มีข้อมูล กดที่แถวเพื่อดูภาพหลักฐาน`
       : "กดที่แถวเพื่อดูภาพหลักฐาน ประเด็นทั้งหมดอยู่ในแถบทุกประเด็น";
     quietNew = true;
     const cards = fresh.length ? gradeGroups(fresh, { ids: false, watchOpen: showWatchNew,
-      onMore: () => { showWatchNew = true; renderToday(); } }) : [el("p", { class: "empty" }, "ไม่มีประเด็นใหม่")];
+      onMore: () => { showWatchNew = true; renderToday(); } }) : [el("p", { class: "empty" }, S.noData || !S.isToday ? "ไม่มีประเด็นในวันล่าสุด" : "ไม่มีประเด็นวันนี้")];
     quietNew = false;
     $("new-list").replaceChildren(...cards);
   }
-  const thStamp = (st) => { if (!st) return "-"; const [d, t] = st.split(" "), x = d.split("-"); return `${+x[2]} ${MON[+x[1] - 1]} ${t}`; };
 
   /* ---------- view: รายคน (one member: behaviours across days, points as evidence inside) ---------- */
   function renderWho() {
@@ -1490,7 +1464,7 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
     e.preventDefault(); reveal(a.getAttribute("href").slice(1));
   });
 
-  function render() { setNewMode(); renderVerdict(); renderToday(); renderBase(); renderJumps(); renderNotes(); renderFilters(); renderPoints(); renderPeople(); renderContext();
+  function render() { renderVerdict(); renderToday(); renderBase(); renderJumps(); renderNotes(); renderFilters(); renderPoints(); renderPeople(); renderContext();
     renderTiers(); renderLimits(); renderMethod(); renderGallery(); chartDirty = true; if (VIEW === "all") { chartDirty = false; renderChart(); } if (VIEW === "who") renderWho(); }
   render();
   setNavH(); route();
