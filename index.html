@@ -1398,22 +1398,28 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
   const MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
   const dayLabel = (d) => { const t = d.split("-"); return `${+t[2]} ${MON[+t[1] - 1]}`; };
   const TIER_RANK = { strong: 3, likely: 2, watch: 1 };
-  let chartDay = null, chartTeam = null;
+  let chartDay = null, chartTeam = null, chartMode = "total";  // chartMode: "total" = cumulative at end of day, "daily" = steps made that day
   function renderOverview() {
     const box = $("chartbody");
     const W = Math.max(300, box.clientWidth), H = Math.round(Math.min(340, Math.max(220, W * 0.42)));
     const m = { l: 44, r: 14, t: 12, b: 28 };
     const rows = team.members.map((mm, i) => { const byD = {}; mm.series.forEach((p) => { if (p[2] != null) byD[p[0]] = p[2]; }); return { alias: mm.alias, i, byD }; });
     const days = [...new Set(rows.flatMap((x) => Object.keys(x.byD)))].sort();
+    /* daily mode: end-of-day total minus the previous calendar day's; a day with no previous-day capture has no baseline and is left out */
+    const dayBefore = (d) => new Date(Date.parse(d + "T00:00:00Z") - 864e5).toISOString().slice(0, 10);
+    const daily = chartMode === "daily";
+    if (daily) rows.forEach((x) => { const t = x.byD, o = {}; for (const d in t) { const b = t[dayBefore(d)]; if (b != null && t[d] >= b) o[d] = t[d] - b; } x.byD = o; });
     const vals = rows.flatMap((x) => Object.values(x.byD));
-    if (!vals.length) { box.replaceChildren(el("p", { class: "empty" }, "ยังไม่มีข้อมูล")); return; }
+    const modeBar = el("div", { class: "daybar", role: "group", "aria-label": "เลือกชนิดกราฟ" },
+      ...[["total", "ก้าวสะสม"], ["daily", "ก้าวต่อวัน"]].map(([v, t]) => el("button", { type: "button", "aria-pressed": String(chartMode === v), onclick: () => { chartMode = v; renderChart(); } }, t)));
+    if (!vals.length) { box.replaceChildren(modeBar, el("p", { class: "empty" }, daily ? "ยังไม่มีวันที่คำนวณก้าวต่อวันได้ (ต้องมียอดสิ้นวันก่อนหน้า)" : "ยังไม่มีข้อมูล")); return; }
     const fv = focused(rows).flatMap((x) => Object.values(x.byD)), ys = fv.length ? fv : vals;
-    const step = niceStep(Math.max(...ys) - Math.min(...ys)), lo = Math.floor(Math.min(...ys) / step) * step, hi = Math.max(Math.ceil(Math.max(...ys) / step) * step, lo + step);
+    const step = niceStep(Math.max(...ys) - (daily ? 0 : Math.min(...ys))), lo = daily ? 0 : Math.floor(Math.min(...ys) / step) * step, hi = Math.max(Math.ceil(Math.max(...ys) / step) * step, lo + step);
     const X = (k) => m.l + (days.length === 1 ? 0 : k / (days.length - 1)) * (W - m.l - m.r);
     const Y = (v) => H - m.b - (v - lo) / (hi - lo || 1) * (H - m.t - m.b);
     const NS = "http://www.w3.org/2000/svg";
     const s = (tag, a) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
-    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "กราฟก้าวสะสมสิ้นวันของสมาชิกทั้งแคมเปญ" });
+    const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": daily ? "กราฟก้าวต่อวันของสมาชิกทั้งแคมเปญ" : "กราฟก้าวสะสมสิ้นวันของสมาชิกทั้งแคมเปญ" });
     for (let v = lo; v <= hi; v += step) {
       svg.append(s("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--line)", "stroke-width": 1 }));
       const tx = s("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" }); tx.textContent = v >= 1000000 ? `${v / 1000000}M` : `${v / 1000}k`; svg.append(tx);
@@ -1444,7 +1450,7 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
       c.addEventListener("click", go); c.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
       svg.append(c);
     });
-    box.replaceChildren(whoBar(rows), svg, el("p", { class: "legend muted" }, "วงกลม = วันที่มีประเด็นต้องสงสัย กดเพื่อดูรายชั่วโมงของวันนั้น"), tip);
+    box.replaceChildren(modeBar, whoBar(rows), svg, el("p", { class: "legend muted" }, (daily ? "ก้าวต่อวัน = ยอดสะสมสิ้นวัน ลบยอดสิ้นวันก่อนหน้า (นับจากภาพสุดท้ายของแต่ละวัน วันแรกที่ยังไม่มีวันก่อนหน้าจึงไม่แสดง วันล่าสุดอาจยังไม่ครบวัน จุดจึงต่ำกว่าจริง) " : "") + "วงกลม = วันที่มีประเด็นต้องสงสัย กดเพื่อดูรายชั่วโมงของวันนั้น"), tip);
   }
   function renderChart() {
     if (chartTeam !== team) { chartTeam = team; chartDay = null; pick = new Set(); skipWho = null; }
@@ -1452,7 +1458,7 @@ a.who-chip[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 
     const multi = days.length > 3, bar = $("chartbar");
     bar.hidden = !multi;
     $("chartnote").textContent = !multi ? "ก้าวสะสมของสมาชิกแต่ละคนจากภาพที่แคปไว้ แยกเป็นรายวัน ตัดช่วงกลางคืนที่ไม่มีภาพออก กดวงกลมเพื่อไปดูประเด็นนั้น"
-      : chartDay ? "ก้าวสะสมของแต่ละคนตลอดวันที่เลือก ตามภาพที่แคปไว้ กดวงกลมเพื่อไปดูประเด็นนั้น" : "ก้าวสะสมสิ้นวันของแต่ละคนตลอดแคมเปญ เลือกวันเพื่อดูรายชั่วโมง";
+      : chartDay ? "ก้าวสะสมของแต่ละคนตลอดวันที่เลือก ตามภาพที่แคปไว้ กดวงกลมเพื่อไปดูประเด็นนั้น" : (chartMode === "daily" ? "ก้าวที่ทำได้ในแต่ละวันของแต่ละคนตลอดแคมเปญ เลือกวันเพื่อดูรายชั่วโมง" : "ก้าวสะสมสิ้นวันของแต่ละคนตลอดแคมเปญ เลือกวันเพื่อดูรายชั่วโมง");
     if (!multi) { chartDay = null; renderDayChart(null); return; }
     const chip = (v, label) => el("button", { type: "button", "aria-pressed": String(chartDay === v), onclick: () => { chartDay = v; renderChart(); } }, label);
     bar.replaceChildren(chip(null, "ทั้งแคมเปญ"), ...days.map((d) => chip(d, dayLabel(d))));
